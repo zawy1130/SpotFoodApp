@@ -1,3 +1,6 @@
 <Solution>
-  <Project Path="SpotFoodApp/SpotFoodApp.csproj" />
+  <Project Path="SpotFoodApp.API/SpotFoodApp.API.csproj" Id="820426ba-90f2-4cbf-beed-2d8478605d24" />
+  <Project Path="SpotFoodApp/SpotFoodApp.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
 </Solution>
