@@ -1,4 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
+using Plugin.Maui.Audio;
+using SpotFoodApp.Service;
 
 namespace SpotFoodApp
 {
@@ -7,6 +9,7 @@ namespace SpotFoodApp
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
+
             builder
                 .UseMauiApp<App>()
                 .ConfigureFonts(fonts =>
@@ -14,11 +17,24 @@ namespace SpotFoodApp
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 });
 
+            // 🔥 HttpClient (API)
+            builder.Services.AddScoped(sp =>
+                new HttpClient
+                {
+                    BaseAddress = new Uri("http://10.0.2.2:5205/")
+                });
+
+            // 🔥 Blazor
             builder.Services.AddMauiBlazorWebView();
 
+            // 🔥 Services
+            builder.Services.AddScoped<AudioService>();
+            builder.Services.AddSingleton<IAudioManager, AudioManager>();
+            builder.Services.AddSingleton<TTSService>();
+
 #if DEBUG
-    		builder.Services.AddBlazorWebViewDeveloperTools();
-    		builder.Logging.AddDebug();
+            builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Logging.AddDebug();
 #endif
 
             return builder.Build();
