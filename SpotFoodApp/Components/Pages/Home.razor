@@ -1,5 +1,130 @@
-﻿@page "/"
+﻿@* 
+@page "/"
+@using Microsoft.Maui.Devices.Sensors
 
-<h1>Hello, world!</h1>
+<div style="padding: 20px; text-align: center;">
+    <h2>📍 Tìm vị trí SpotFood</h2>
 
-Welcome to your new app.
+    @if (viTri == null)
+    {
+        <p>Chưa có tọa độ. Hãy nhấn nút bên dưới!</p>
+    }
+    else
+    {
+        <div style="background: #e7f3fe; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <p><b>Vĩ độ (Lat):</b> @viTri.Latitude</p>
+            <p><b>Kinh độ (Lon):</b> @viTri.Longitude</p>
+        </div>
+    }
+
+    <button @onclick="LayToaDo"
+            style="padding: 10px 20px; background: orange; color: white; border: none; border-radius: 5px;">
+        Lấy vị trí của tôi
+    </button>
+</div>
+
+@code {
+    // Biến để lưu tọa độ sau khi lấy được
+    private Location? viTri;
+
+    private async Task LayToaDo()
+    {
+        try
+        {
+            // Bước A: Yêu cầu lấy tọa độ với độ chính xác Trung bình
+            // (Medium là đủ để tìm quán ăn và tiết kiệm pin)
+            var yeuCau = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10));
+
+            // Bước B: Chờ máy ảo/điện thoại trả về kết quả
+            viTri = await Geolocation.Default.GetLocationAsync(yeuCau);
+
+            // Bước C: Báo cho giao diện biết là đã có dữ liệu mới để hiện ra
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // Nếu có lỗi (Ví dụ: Người dùng từ chối cấp quyền)
+            Console.WriteLine("Lỗi rồi: " + ex.Message);
+        }
+    }
+} *@
+
+@page "/"
+@using Microsoft.Maui.Devices.Sensors
+@inject NavigationManager NavManager
+
+@if (!string.IsNullOrEmpty(thongBaoLoi))
+{
+    <div class="alert alert-danger mt-2">
+        ⚠️ @thongBaoLoi
+    </div>
+}
+
+<div class="container text-center mt-5">
+    <h1 class="display-4">🍔 SpotFood</h1>
+
+    <div class="card shadow-sm p-4 mb-4">
+        @if (viTri != null)
+        {
+            <div class="alert alert-success">
+                <p>Đã xác định được vị trí của bạn!</p>
+            </div>
+            <button class="btn btn-primary btn-lg w-100 mt-2" @onclick="GoToRestaurants">
+                🚀 Xem quán ăn quanh đây
+            </button>
+        }
+        else
+        {
+            <button class="btn btn-warning btn-lg w-100" @onclick="LayToaDo">
+                🎯 Xác định vị trí để bắt đầu
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private Location? viTri;
+    private string thongBaoLoi = ""; // Biến để lưu lời nhắn lỗi
+
+    private async Task LayToaDo()
+    {
+        try
+        {
+            thongBaoLoi = ""; // Xóa lỗi cũ nếu có
+            var request = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10));
+
+            // Dòng này có thể gây lỗi nếu GPS tắt hoặc bị từ chối
+            viTri = await Geolocation.Default.GetLocationAsync(request);
+
+            if (viTri == null)
+            {
+                thongBaoLoi = "Không thể tìm thấy vị trí. Hãy thử lại nhé!";
+            }
+        }
+        catch (PermissionException)
+        {
+            thongBaoLoi = "Bạn chưa cấp quyền GPS cho SpotFood rồi!";
+        }
+        catch (FeatureNotSupportedException)
+        {
+            thongBaoLoi = "Thiết bị của bạn không hỗ trợ định vị.";
+        }
+        catch (Exception ex)
+        {
+            thongBaoLoi = "Có lỗi xảy ra: " + ex.Message;
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private void GoToRestaurants()
+    {
+        if (viTri != null)
+        {
+            // Truyền tọa độ qua URL để trang sau có thể nhận được
+            NavManager.NavigateTo($"/restaurants/{viTri.Latitude}/{viTri.Longitude}");
+        }
+    }
+}

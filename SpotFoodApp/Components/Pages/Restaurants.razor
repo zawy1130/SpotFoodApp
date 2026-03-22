@@ -1,0 +1,120 @@
+﻿@page "/restaurants/{Lat:double}/{Lon:double}"
+@using Microsoft.Maui.Devices.Sensors
+@implements IDisposable
+@inject HttpClient Http
+
+<div class="restaurant-street">
+    <div class="street-line"></div>
+
+    <div class="container">
+        <h3 class="text-center my-4 text-white">Khám Phá SpotFood</h3>
+        
+        @if (fullShops == null)
+        {
+            <div class="text-center mt-5 text-white">
+                <div class="spinner-border" role="status"></div>
+                <p>Đang tải con đường ẩm thực...</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var shop in fullShops)
+            {
+                // Kiểm tra xem quán này có đang ở "Rất gần" để hiện hiệu ứng thuyết minh không
+                bool isVeryNear = nearbyShops?.Any(s => s.PoiId == shop.PoiId) ?? false;
+
+                <div class="row mb-5 align-items-center">
+                    @if (shop.PoiId % 2 == 0) {
+                        <div class="col-5">
+                            <div class="card shop-card @(isVeryNear ? "highlight-near" : "")">
+                                <img src="@shop.ImageUrl" class="card-img-top">
+                                <div class="p-2 text-center">
+                                    <h6>@shop.Name</h6>
+                                    @if(isVeryNear){ <span class="badge bg-warning text-dark">🎧 Sẵn sàng thuyết minh</span> }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-2 text-center text-white">📍</div>
+                        <div class="col-5"></div>
+                    } else {
+                        <div class="col-5"></div>
+                        <div class="col-2 text-center text-white">📍</div>
+                        <div class="col-5">
+                            <div class="card shop-card @(isVeryNear ? "highlight-near" : "")">
+                                <img src="@shop.ImageUrl" class="card-img-top">
+                                <div class="p-2 text-center">
+                                    <h6>@shop.Name</h6>
+                                    @if(isVeryNear){ <span class="badge bg-warning text-dark">🎧 Sẵn sàng thuyết minh</span> }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    /* Hiệu ứng cho quán đang ở gần để thuyết minh */
+    .highlight-near {
+        border: 4px solid #ffc107 !important;
+        transform: scale(1.05);
+        transition: all 0.3s ease;
+        box-shadow: 0 0 15px #ffc107;
+    }
+    /* ... giữ các style cũ ... */
+</style>
+
+@code {
+    [Parameter] public double Lat { get; set; }
+    [Parameter] public double Lon { get; set; }
+
+    private List<Shop>? fullShops;     // Danh sách hiện tất cả
+    private List<Shop>? nearbyShops;   // Danh sách dùng cho thuyết minh (ngầm)
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Lấy TẤT CẢ các quán để hiện thị con đường
+        await LoadAllShops();
+
+        // 2. Bắt đầu tracking để tìm các quán "siêu gần"
+        await StartLocationTracking();
+    }
+
+    private async Task LoadAllShops()
+    {
+        try {
+            // Gọi API GetAll của bạn
+            fullShops = await Http.GetFromJsonAsync<List<Shop>>("api/poi");
+        } catch { fullShops = new(); }
+    }
+
+    private async void OnLocationChanged(object? sender, GeolocationLocationChangedEventArgs e)
+    {
+        // Chỉ lấy các quán trong bán kính cực nhỏ (ví dụ 0.1km = 100m)
+        string apiUrl = $"api/poi/nearby?lat={e.Location.Latitude}&lon={e.Location.Longitude}&radiusInKm=0.1";
+        
+        var newData = await Http.GetFromJsonAsync<List<Shop>>(apiUrl);
+        
+        if (newData != null) {
+            nearbyShops = newData;
+            await InvokeAsync(StateHasChanged);
+            
+            // Logic thuyết minh: Nếu có quán mới lọt vào tầm 100m
+            if (nearbyShops.Any()) {
+                Console.WriteLine("Đã tìm thấy quán gần để thuyết minh: " + nearbyShops.First().Name);
+                // Sau này bạn sẽ gọi hàm PlayAudio() ở đây
+            }
+        }
+    }
+
+    private async Task StartLocationTracking() { /* Giữ nguyên như cũ */ }
+    public void Dispose() { /* Giữ nguyên như cũ */ }
+
+    public class Shop {
+        public int PoiId { get; set; } // Dùng đúng tên từ API của bạn
+        public string Name { get; set; } = "";
+        public string ImageUrl { get; set; } = "";
+    }
+}
