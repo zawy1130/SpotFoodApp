@@ -1,5 +1,11 @@
 ﻿using Android.App;
+using Android.OS;
 using Android.Runtime;
+
+[assembly: UsesPermission(Android.Manifest.Permission.AccessCoarseLocation)]
+[assembly: UsesPermission(Android.Manifest.Permission.AccessFineLocation)]
+[assembly: UsesFeature("android.hardware.location", Required = false)]
+[assembly: UsesFeature("android.hardware.location.gps", Required = false)]
 
 namespace SpotFoodApp
 {

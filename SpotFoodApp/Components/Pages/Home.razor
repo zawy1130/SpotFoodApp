@@ -1,5 +1,152 @@
 ﻿@page "/"
+@inject IJSRuntime JS
+@inject HttpClient Http
 
-<h1>Hello, world!</h1>
+<div class="page">
 
-Welcome to your new app.
+    <!-- HEADER -->
+    <div class="header">
+        <input class="search" placeholder="Tìm kiếm địa điểm du lịch..." />
+
+        <div class="lang">
+            <img src="images/vn_flag.png" alt="Vietnam" />
+            <span>Tiếng Việt</span>
+        </div>
+    </div>
+
+    <!-- CATEGORY -->
+    <div class="category-bar">
+        @foreach (var c in Categories)
+        {
+            <div class="category @(c == Selected ? "active" : "")"
+                 @onclick="() => SelectCategory(c)">
+                @c
+            </div>
+        }
+    </div>
+
+    <!-- MAP -->
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+
+    <!-- BOTTOM SHEET -->
+    <div class="bottom-sheet">
+
+        <div class="drag-bar"></div>
+
+        <!-- USER -->
+        <div class="user">
+            <span class="icon">👤</span>
+            <span>Xin chào, user1</span>
+        </div>
+
+        <!-- LIST POI REAL -->
+        <div class="poi-list">
+            @foreach (var item in PoiList)
+            {
+                <div class="poi-card">
+                    <img src="images/demo.jpg" alt="@item.name" />
+
+                    <div class="info">
+                        <div class="name">@item.name</div>
+                        <div class="distance">@item.distance m</div>
+                    </div>
+
+                    <button class="play">▶</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // ================= INIT =================
+    DotNetObjectReference<Home>? objRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+
+            await JS.InvokeVoidAsync("initMap");
+            await JS.InvokeVoidAsync("initBottomSheet");
+
+            // truyền objRef xuống JS
+            await JS.InvokeVoidAsync("getUserLocation", objRef);
+        }
+    }
+
+    // ================= CATEGORY =================
+    List<string> Categories = new()
+    {
+        "Tất cả", "Nhà hàng", "Cafe", "Khách sạn", "Điểm tham quan"
+    };
+
+    string Selected = "Tất cả";
+
+    void SelectCategory(string c)
+    {
+        Selected = c;
+
+        // TODO: filter theo category sau
+    }
+
+    // ================= POI MODEL =================
+    class PoiMap
+    {
+        public int poiId { get; set; }
+        public string name { get; set; }
+        public double latitude { get; set; }
+        public double longitude { get; set; }
+        public double distance { get; set; }
+    }
+
+    // ================= DATA =================
+    List<PoiMap> PoiList = new();
+
+    // ================= RECEIVE GPS =================
+    [JSInvokable]
+    public async Task ReceiveLocation(double lat, double lng)
+    {
+        // gọi API
+        var pois = await Http.GetFromJsonAsync<List<PoiMap>>(
+            $"http://localhost:5205/api/poi/nearby?lat={lat}&lng={lng}");
+
+        if (pois == null) return;
+
+        // tính khoảng cách
+        foreach (var p in pois)
+        {
+            p.distance = CalculateDistance(lat, lng, p.latitude, p.longitude);
+        }
+
+        // sort gần nhất
+        PoiList = pois.OrderBy(p => p.distance).ToList();
+
+        // update UI
+        StateHasChanged();
+
+        // show marker
+        await JS.InvokeVoidAsync("showPOIs", PoiList);
+    }
+
+    // ================= HAVERSINE =================
+    double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+    {
+        var R = 6371e3; // mét
+        var φ1 = lat1 * Math.PI / 180;
+        var φ2 = lat2 * Math.PI / 180;
+        var Δφ = (lat2 - lat1) * Math.PI / 180;
+        var Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        var a = Math.Sin(Δφ / 2) * Math.Sin(Δφ / 2) +
+                Math.Cos(φ1) * Math.Cos(φ2) *
+                Math.Sin(Δλ / 2) * Math.Sin(Δλ / 2);
+
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+
+        return Math.Round(R * c); // mét
+    }
+}

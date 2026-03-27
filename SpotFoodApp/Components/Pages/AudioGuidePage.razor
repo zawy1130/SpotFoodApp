@@ -1,0 +1,115 @@
+﻿@* @page "/map"
+<div class="page">
+
+    <!-- HEADER -->
+    <div class="header">
+        <span class="back">←</span>
+
+        <input class="search" placeholder="Tìm kiếm..." />
+
+        <div class="lang">
+            <img src="images/vn_flag.png" />
+            <span>Tiếng Việt</span>
+        </div>
+    </div>
+
+    <!-- CATEGORY -->
+    <div class="category-bar">
+        @foreach (var c in Categories)
+        {
+            <div class="category @(c == Selected ? "active" : "")"
+                 @onclick="() => SelectCategory(c)">
+                @c
+            </div>
+        }
+    </div>
+
+    <!-- MAP -->
+    <div class="map-container">
+        <!-- Placeholder map -->
+        <div id="map">
+            <span>MAP VIEW (Leaflet sẽ gắn sau)</span>
+        </div>
+    </div>
+
+    <!-- BOTTOM SHEET -->
+    <div class="bottom-sheet @(isExpanded ? "expanded" : "")"
+         @onmousedown="StartDrag"
+         @onmousemove="OnDrag"
+         @onmouseup="EndDrag">
+
+        <div class="drag-bar"></div>
+
+        <!-- USER -->
+        <div class="user">
+            <span class="icon">👤</span>
+            <span>Xin chào, user1</span>
+        </div>
+
+        <!-- LIST -->
+        <div class="poi-list">
+            @foreach (var item in PoiDemo)
+            {
+                <div class="poi-card">
+                    <img src="images/demo.jpg" />
+
+                    <div class="info">
+                        <div class="name">@item.Name</div>
+                        <div class="distance">@item.Distance m</div>
+                    </div>
+
+                    <button class="play">▶</button>
+                </div>
+            }
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    List<string> Categories = new()
+    {
+        "All", "Nhà hàng", "Cafe", "Khách sạn"
+    };
+
+    string Selected = "All";
+
+    void SelectCategory(string c)
+    {
+        Selected = c;
+    }
+
+    bool isExpanded = false;
+    double startY;
+
+    void StartDrag(MouseEventArgs e)
+    {
+        startY = e.ClientY;
+    }
+
+    void OnDrag(MouseEventArgs e)
+    {
+        var delta = e.ClientY - startY;
+
+        if (delta < -50) isExpanded = true;
+        if (delta > 50) isExpanded = false;
+    }
+
+    void EndDrag(MouseEventArgs e)
+    {
+    }
+
+    class PoiItem
+    {
+        public string Name { get; set; }
+        public int Distance { get; set; }
+    }
+
+    List<PoiItem> PoiDemo = new()
+    {
+        new() { Name = "Chánh điện", Distance = 62 },
+        new() { Name = "Khu tham quan", Distance = 120 },
+        new() { Name = "Cafe sân vườn", Distance = 200 }
+    };
+} *@

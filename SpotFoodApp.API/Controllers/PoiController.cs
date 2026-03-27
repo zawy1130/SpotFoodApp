@@ -23,4 +23,21 @@ public class PoiController : ControllerBase
 
         return Ok(data);
     }
+
+    [HttpGet("nearby")]
+    public async Task<IActionResult> GetNearby(double lat, double lng)
+    {
+        var pois = await _context.Pois
+            .Where(p => Math.Abs(p.Latitude - lat) < 0.01 &&
+                        Math.Abs(p.Longitude - lng) < 0.01)
+            .Select(p => new {
+                p.PoiId,
+                p.Name,
+                p.Latitude,
+                p.Longitude
+            })
+            .ToListAsync();
+
+        return Ok(pois);
+    }
 }

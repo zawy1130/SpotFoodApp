@@ -2,12 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+
     <title>SpotFoodApp</title>
     <base href="/" />
+
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="stylesheet" href="SpotFoodApp.styles.css" />
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
     <link rel="icon" href="data:,">
 </head>
 
@@ -23,8 +30,14 @@
         <a class="dismiss">🗙</a>
     </div>
 
+    <!-- Blazor -->
     <script src="_framework/blazor.webview.js" autostart="false"></script>
 
-</body>
+    <!-- Leaflet -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
+    <!-- Map JS -->
+    <script src="js/map.js"></script>
+
+</body>
 </html>
