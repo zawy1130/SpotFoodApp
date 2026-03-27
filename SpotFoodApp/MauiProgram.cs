@@ -31,6 +31,7 @@ namespace SpotFoodApp
             builder.Services.AddScoped<AudioService>();
             builder.Services.AddSingleton<IAudioManager, AudioManager>();
             builder.Services.AddSingleton<TTSService>();
+            builder.Services.AddSingleton<LocationService>();   
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();
