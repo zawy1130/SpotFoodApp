@@ -1,21 +1,23 @@
 ﻿@page "/"
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject SpotFoodApp.Service.LocationService LocationService
+
 
 <div class="page">
 
     <!-- HEADER -->
     <div class="header">
-        <input class="search" placeholder="Tìm kiếm địa điểm du lịch..." />
-
+        @* <input class="search" placeholder="Tìm kiếm địa điểm du lịch..." /> *@
+        <h2> Phố ẩm thực Vĩnh Khánh</h2>
         <div class="lang">
-            <img src="images/vn_flag.png" alt="Vietnam" />
+            <img src="img/vn_flag.png" alt="Vietnam" />
             <span>Tiếng Việt</span>
         </div>
     </div>
 
     <!-- CATEGORY -->
-    <div class="category-bar">
+    @* <div class="category-bar">
         @foreach (var c in Categories)
         {
             <div class="category @(c == Selected ? "active" : "")"
@@ -23,11 +25,25 @@
                 @c
             </div>
         }
-    </div>
+    </div> *@
 
     <!-- MAP -->
     <div class="map-container">
         <div id="map"></div>
+        <!-- 🔥 Nút quay lại vị trí -->
+        <button @onclick="GoToMyLocation"
+                style="
+            position:absolute;
+            bottom:200px;
+            right:200px;
+            z-index:999;
+            padding:10px 15px;
+            border-radius:10px;
+            background:#007bff;
+            color:white;
+            border:none;">
+            📍 My Location
+        </button>
     </div>
 
     <!-- BOTTOM SHEET -->
@@ -43,7 +59,7 @@
 
         <!-- LIST POI REAL -->
         <div class="poi-list">
-            @foreach (var item in PoiList)
+            @* @foreach (var item in PoiList)
             {
                 <div class="poi-card">
                     <img src="images/demo.jpg" alt="@item.name" />
@@ -55,12 +71,12 @@
 
                     <button class="play">▶</button>
                 </div>
-            }
+            } *@
         </div>
     </div>
 </div>
 
-@code {
+@* @code {
     // ================= INIT =================
     DotNetObjectReference<Home>? objRef;
 
@@ -112,7 +128,7 @@
     {
         // gọi API
         var pois = await Http.GetFromJsonAsync<List<PoiMap>>(
-            $"http://localhost:5205/api/poi/nearby?lat={lat}&lng={lng}");
+            $"http://10.0.2.2:5205/api/poi/nearby?lat={lat}&lng={lng}");
 
         if (pois == null) return;
 
@@ -148,5 +164,27 @@
         var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 
         return Math.Round(R * c); // mét
+    }
+} *@
+@code {
+    private async Task GoToMyLocation()
+    {
+        await JS.InvokeVoidAsync("goToMyLocation");
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initMap");
+
+            await LocationService.StartListening(async (loc) =>
+            {
+                await JS.InvokeVoidAsync(
+                    "updateUserLocation",
+                    loc.Latitude,
+                    loc.Longitude
+                );
+            });
+        }
     }
 }

@@ -1,6 +1,7 @@
 ﻿namespace SpotFoodApp.DTO
 {
     public class AudioGuideDto
+
     {
         public int PoiId { get; set; }
         public string? PoiName { get; set; }
