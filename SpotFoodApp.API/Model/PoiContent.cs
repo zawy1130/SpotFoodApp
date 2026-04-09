@@ -14,21 +14,18 @@ namespace SpotFoodApp.API.Model
         [Column("poi_id")]
         public int PoiId { get; set; }
 
-        [Column("language_code")]
-        public string LanguageCode { get; set; }
-
         [Column("title")]
-        public string Title { get; set; }
+        public string? Title { get; set; }
 
         [Column("description")]
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
         [Column("audio_id")]
         public int? AudioId { get; set; }
 
         // navigation
         [JsonIgnore]
-        public Poi Poi { get; set; }
-        public AudioFile Audio { get; set; }
+        public Poi? Poi { get; set; }
+        public AudioFile? Audio { get; set; }
     }
 }

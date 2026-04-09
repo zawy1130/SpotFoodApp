@@ -28,10 +28,10 @@ namespace SpotFoodApp
             builder.Services.AddMauiBlazorWebView();
 
             // 🔥 Services
-            builder.Services.AddScoped<AudioService>();
+            builder.Services.AddScoped<PoiService>();
+
             builder.Services.AddSingleton<IAudioManager, AudioManager>();
             builder.Services.AddSingleton<TTSService>();
-            builder.Services.AddSingleton<LocationService>();   
 
 #if DEBUG
             builder.Services.AddBlazorWebViewDeveloperTools();

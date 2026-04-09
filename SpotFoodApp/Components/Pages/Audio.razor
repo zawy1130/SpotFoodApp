@@ -1,4 +1,4 @@
-﻿@page "/audio"
+﻿@* @page "/audio"
 @inject SpotFoodApp.Service.AudioService AudioService
 @inject SpotFoodApp.Service.TTSService TTSService
 
@@ -56,4 +56,4 @@ else
     {
         await TTSService.Speak(text);
     }
-}
+} *@

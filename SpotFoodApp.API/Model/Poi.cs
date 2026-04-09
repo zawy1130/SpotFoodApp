@@ -11,25 +11,22 @@ namespace SpotFoodApp.API.Model
         public int PoiId { get; set; }
 
         [Column("name")]
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         [Column("latitude")]
         public double Latitude { get; set; }
 
         [Column("longitude")]
         public double Longitude { get; set; }
-
-        [Column("radius")]
-        public double Radius { get; set; }
-
-        [Column("priority")]
-        public int? Priority { get; set; }
-
+        
         [Column("image_url")]
-        public string ImageUrl { get; set; }
+        public string? ImageUrl { get; set; }
 
         [Column("map_link")]
-        public string MapLink { get; set; }
+        public string? MapLink { get; set; }
+
+        [Column("address")]
+        public string? Address { get; set; }
 
         [Column("category_id")]
         public int? CategoryId { get; set; }
@@ -37,7 +34,8 @@ namespace SpotFoodApp.API.Model
         [Column("created_at")]
         public DateTime? CreatedAt { get; set; }
 
+        public Category? Category { get; set; }
         // navigation
-        public ICollection<PoiContent> Contents { get; set; }
+        public ICollection<PoiContent>? Contents { get; set; }
     }
 }

@@ -11,6 +11,8 @@ namespace SpotFoodApp.API.Data
         public DbSet<PoiContent> PoiContents { get; set; }
         public DbSet<AudioFile> AudioFiles { get; set; }
 
+        public DbSet<Category> Category{ get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // POI
@@ -31,7 +33,7 @@ namespace SpotFoodApp.API.Data
 
             // UNIQUE (poi_id + language_code)
             modelBuilder.Entity<PoiContent>()
-                .HasIndex(pc => new { pc.PoiId, pc.LanguageCode })
+                .HasIndex(pc => new { pc.PoiId})
                 .IsUnique();
         }
     }
