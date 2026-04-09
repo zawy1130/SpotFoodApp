@@ -1,115 +1,148 @@
-﻿@* @page "/map"
+﻿@* @page "/"
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject SpotFoodApp.Service.LocationService LocationService
+@using SpotFoodApp.DTO
+
 <div class="page">
 
-    <!-- HEADER -->
     <div class="header">
-        <span class="back">←</span>
-
-        <input class="search" placeholder="Tìm kiếm..." />
-
-        <div class="lang">
-            <img src="images/vn_flag.png" />
-            <span>Tiếng Việt</span>
-        </div>
+        <h4>Phố ẩm thực Vĩnh Khánh</h4>
     </div>
 
     <!-- CATEGORY -->
     <div class="category-bar">
         @foreach (var c in Categories)
         {
-            <div class="category @(c == Selected ? "active" : "")"
-                 @onclick="() => SelectCategory(c)">
-                @c
+            <div class="category @(c.CategoryId == SelectedCategory ? "active" : "")"
+                 @onclick="() => SelectCategory(c.CategoryId)">
+                @c.CategoryName
             </div>
         }
     </div>
 
     <!-- MAP -->
     <div class="map-container">
-        <!-- Placeholder map -->
-        <div id="map">
-            <span>MAP VIEW (Leaflet sẽ gắn sau)</span>
-        </div>
+        <div id="map"></div>
+
+        <button class="btn-location" @onclick="GoToMyLocation">
+            📍
+        </button>
     </div>
 
     <!-- BOTTOM SHEET -->
-    <div class="bottom-sheet @(isExpanded ? "expanded" : "")"
-         @onmousedown="StartDrag"
-         @onmousemove="OnDrag"
-         @onmouseup="EndDrag">
-
-        <div class="drag-bar"></div>
-
-        <!-- USER -->
-        <div class="user">
-            <span class="icon">👤</span>
-            <span>Xin chào, user1</span>
-        </div>
-
-        <!-- LIST -->
+    <div class="bottom-sheet">
         <div class="poi-list">
-            @foreach (var item in PoiDemo)
+            @foreach (var item in FilteredPoi)
             {
-                <div class="poi-card">
-                    <img src="images/demo.jpg" />
-
+                <div class="poi-card" @onclick="() => FocusPoi(item)">
                     <div class="info">
                         <div class="name">@item.Name</div>
-                        <div class="distance">@item.Distance m</div>
+                        <div class="distance">
+                            @(item.Distance < 1000
+                                ? $"{item.Distance} m"
+                                : $"{(item.Distance / 1000.0):0.0} km")
+                        </div>
                     </div>
-
-                    <button class="play">▶</button>
                 </div>
             }
         </div>
-
     </div>
-
 </div>
 
 @code {
-    List<string> Categories = new()
-    {
-        "All", "Nhà hàng", "Cafe", "Khách sạn"
-    };
+    List<CategoryDto> Categories = new();
+    List<PoiDto> PoiList = new();           // Danh sách POI gần nhất (dùng cho bottom sheet)
 
-    string Selected = "All";
+    int SelectedCategory = 0;
 
-    void SelectCategory(string c)
+    // Bottom sheet luôn hiển thị POI gần nhất (chỉ lọc category khi cần)
+    IEnumerable<PoiDto> FilteredPoi =>
+        PoiList
+            .Where(p => SelectedCategory == 0 || p.CategoryId == SelectedCategory)
+            .OrderBy(p => p.Distance)
+            .Take(10);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        Selected = c;
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initMap");
+
+            // Load categories
+            Categories = await Http.GetFromJsonAsync<List<CategoryDto>>("http://10.0.2.2:5205/api/categories")
+                         ?? new List<CategoryDto>();
+
+            Categories.Insert(0, new CategoryDto
+            {
+                CategoryId = 0,
+                CategoryName = "Tất cả"
+            });
+
+            // Bắt đầu theo dõi vị trí người dùng
+            await LocationService.StartListening(async (loc) =>
+            {
+                // Cập nhật vị trí user trên map
+                await JS.InvokeVoidAsync("updateUserLocation", loc.Latitude, loc.Longitude);
+
+                // Load POI gần vị trí hiện tại
+                await LoadPOI(loc.Latitude, loc.Longitude);
+            });
+        }
     }
 
-    bool isExpanded = false;
-    double startY;
-
-    void StartDrag(MouseEventArgs e)
+    async Task LoadPOI(double lat, double lng)
     {
-        startY = e.ClientY;
+        var pois = await Http.GetFromJsonAsync<List<PoiDto>>(
+            $"http://10.0.2.2:5205/api/pois/nearby?lat={lat}&lng={lng}&radius=1000"); // tăng radius nếu cần
+
+        if (pois == null) return;
+
+        // Tính khoảng cách
+        foreach (var p in pois)
+        {
+            p.Distance = CalculateDistance(lat, lng, p.Latitude, p.Longitude);
+        }
+
+        PoiList = pois.OrderBy(p => p.Distance).ToList();
+
+        StateHasChanged();
+
+        // Gửi toàn bộ POI lên JavaScript để hiển thị marker
+        await JS.InvokeVoidAsync("showPOIs", PoiList);
     }
 
-    void OnDrag(MouseEventArgs e)
+    async Task SelectCategory(int id)
     {
-        var delta = e.ClientY - startY;
-
-        if (delta < -50) isExpanded = true;
-        if (delta > 50) isExpanded = false;
+        SelectedCategory = id;
+        await JS.InvokeVoidAsync("filterMarkers", id);   // chỉ lọc marker trên map
+        StateHasChanged(); // refresh bottom sheet
     }
 
-    void EndDrag(MouseEventArgs e)
+    async Task FocusPoi(PoiDto poi)
     {
+        await JS.InvokeVoidAsync("focusToPoi", poi.Latitude, poi.Longitude);
     }
 
-    class PoiItem
+    async Task GoToMyLocation()
     {
-        public string Name { get; set; }
-        public int Distance { get; set; }
+        await JS.InvokeVoidAsync("goToMyLocation");
     }
 
-    List<PoiItem> PoiDemo = new()
+    double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
     {
-        new() { Name = "Chánh điện", Distance = 62 },
-        new() { Name = "Khu tham quan", Distance = 120 },
-        new() { Name = "Cafe sân vườn", Distance = 200 }
-    };
+        var R = 6371e3; // mét
+        var φ1 = lat1 * Math.PI / 180;
+        var φ2 = lat2 * Math.PI / 180;
+        var Δφ = (lat2 - lat1) * Math.PI / 180;
+        var Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        var a = Math.Sin(Δφ / 2) * Math.Sin(Δφ / 2) +
+                Math.Cos(φ1) * Math.Cos(φ2) *
+                Math.Sin(Δλ / 2) * Math.Sin(Δλ / 2);
+
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+
+        return Math.Round(R * c);
+    }
 } *@

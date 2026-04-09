@@ -11,7 +11,7 @@ namespace SpotFoodApp.API.Model
         public int AudioId { get; set; }
 
         [Column("file_path")]
-        public string FilePath { get; set; }
+        public string? FilePath { get; set; }
 
         [Column("duration")]
         public int? Duration { get; set; }
@@ -23,6 +23,6 @@ namespace SpotFoodApp.API.Model
         public DateTime? CreatedAt { get; set; }
 
         // navigation
-        public ICollection<PoiContent> Contents { get; set; }
+        public ICollection<PoiContent>? Contents { get; set; }
     }
 }

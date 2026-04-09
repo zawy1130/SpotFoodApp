@@ -2,7 +2,6 @@
 using Android.Content.PM;
 using Android.OS;
 
-// 👉 thêm
 using Android;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
@@ -22,7 +21,7 @@ namespace SpotFoodApp
         {
             base.OnCreate(savedInstanceState);
 
-            // 🔥 Xin quyền GPS runtime
+            // Xin quyền GPS runtime
             if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.AccessFineLocation) != Permission.Granted)
             {
                 ActivityCompat.RequestPermissions(this,

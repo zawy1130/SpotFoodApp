@@ -1,0 +1,342 @@
+﻿@page "/mapview"
+@layout Shared.MapLayout
+
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject PoiService PoiService
+@inject TTSService TTS
+
+@using Microsoft.Maui.Devices.Sensors
+@using Microsoft.JSInterop
+@using SpotFoodApp.DTO
+@using SpotFoodApp.Service
+
+<div class="page">
+
+    <!-- HEADER -->
+    <div class="header">
+        <h4>Phố ẩm thực Vĩnh Khánh</h4>
+
+        <div class="language-box">
+            <select @onchange="OnLanguageChanged">
+                @foreach (var lang in Languages)
+                {
+                    <option value="@lang.Code" selected="@(lang.Code == SelectedLanguage)">
+                        @lang.Name
+                    </option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <!-- CATEGORY -->
+    <div class="category-bar">
+        @foreach (var c in Categories)
+        {
+            <div class="category @(selectedCategoryId == c.CategoryId ? "active" : "")"
+                 @onclick="() => OnCategoryClick(c.CategoryId)">
+                @c.CategoryName
+            </div>
+        }
+    </div>
+
+    <!-- MAP -->
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+
+    <!-- POPUP -->
+    <div id="poi-overlay" class="poi-overlay hidden">
+        <div class="poi-card">
+            <img id="poi-image" />
+
+            <div class="poi-content">
+                <h3 id="poi-name"></h3>
+                <p id="poi-desc"></p>
+                <p id="poi-address" class="poi-address"></p>
+
+                <div class="poi-actions">
+                    <a id="poi-map" target="_blank">📍 Xem Google Maps</a>
+                    <button id="btn-audio">🔊 Nghe thuyết minh</button>
+                </div>
+
+                <button class="close-btn" onclick="mapHelper.closeOverlay()">✖</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BUTTON CURRENT LOCATION -->
+    <button class="btn-location" @onclick="GoToCurrent">
+        📍
+    </button>
+
+    <!-- BOTTOM SHEET -->
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="drag-bar" id="dragBar"></div>
+        <div class="poi-list">
+            @foreach (var p in FilteredPois)
+            {
+                <div class="poi-item"
+                     @onclick="() => FocusPoi(p)">
+                    <div class="poi-title">@p.Name</div>
+                </div>
+            }
+        </div>
+    </div>
+
+</div>
+
+@code {
+    // ================= STATE =================
+    double lat = 10.762622;
+    double lng = 106.660172;
+    bool isTracking = true;
+    int selectedCategoryId = 0;
+
+    List<CategoryDto> Categories = new();
+    List<PoiDto> AllPois = new();
+    List<PoiDto> FilteredPois = new();
+
+    // ================= NGÔN NGỮ & TTS SETTINGS =================
+    List<LanguageOption> Languages = new()
+    {
+        new LanguageOption { Code = "vi", Name = "🇻🇳 Tiếng Việt" },
+
+        new LanguageOption { Code = "ja", Name = "🇯🇵 日本語" },
+        new LanguageOption { Code = "en", Name = "🇺🇸 English" },
+        new LanguageOption { Code = "fr", Name = "🇫🇷 Français" },
+        new LanguageOption { Code = "ko", Name = "🇰🇷 한국어" },
+        new LanguageOption { Code = "zh", Name = "🇨🇳 中文" },
+        new LanguageOption { Code = "es", Name = "🇪🇸 Español" },
+        new LanguageOption { Code = "de", Name = "🇩🇪 Deutsch" },
+        new LanguageOption { Code = "ru", Name = "🇷🇺 Русский" }
+    };
+
+    string SelectedLanguage = "vi";
+    List<Locale> AvailableVoices = new();
+    Locale? SelectedVoice = null;
+    double SpeechRate = 1.0;
+
+    DotNetObjectReference<Mapview>? objRef;
+
+    // ================= INIT =================
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategoryFromApi();
+        await LoadPoiFromApi();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+
+            var location = await GetLocation();
+            if (location != null)
+            {
+                lat = location.Latitude;
+                lng = location.Longitude;
+            }
+
+            var mapData = ConvertToPlaces(FilteredPois);
+            await JS.InvokeVoidAsync("mapHelper.initMap", lat, lng, mapData, objRef);
+
+            _ = StartTracking();
+            await LoadAvailableVoices();   // Load giọng đọc ban đầu
+        }
+    }
+
+    void OnLanguageChanged(ChangeEventArgs e)
+    {
+        SelectedLanguage = e.Value?.ToString() ?? "vi";
+        _ = LoadAvailableVoices();
+    }
+
+    async Task LoadAvailableVoices()
+    {
+        try
+        {
+            var locales = await TextToSpeech.Default.GetLocalesAsync();
+            AvailableVoices = locales
+                .Where(l => l.Language.StartsWith(SelectedLanguage, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(l => l.Name)
+                .ToList();
+
+            SelectedVoice = AvailableVoices.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Load voices error: {ex.Message}");
+            AvailableVoices.Clear();
+        }
+    }
+
+    // ================= LOAD DATA =================
+    async Task LoadCategoryFromApi()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<CategoryDto>>("http://10.0.2.2:5205/api/categories");
+            if (result != null)
+            {
+                result.Insert(0, new CategoryDto { CategoryId = 0, CategoryName = "Tất cả" });
+                Categories = result;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Category Error: {ex.Message}");
+        }
+    }
+
+    async Task LoadPoiFromApi()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<PoiDto>>("http://10.0.2.2:5205/api/pois");
+            if (result != null)
+            {
+                AllPois = result;
+                FilteredPois = result.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"POI Error: {ex.Message}");
+        }
+    }
+
+    async Task OnCategoryClick(int categoryId)
+    {
+        selectedCategoryId = categoryId;
+
+        FilteredPois = categoryId == 0
+            ? AllPois.ToList()
+            : AllPois.Where(p => p.CategoryId == categoryId).ToList();
+
+        var mapData = ConvertToPlaces(FilteredPois);
+        await JS.InvokeVoidAsync("mapHelper.updatePlaces", mapData);
+
+        StateHasChanged();
+    }
+
+    List<Place> ConvertToPlaces(List<PoiDto> list)
+    {
+        return list.Select(p => new Place
+        {
+            poiId = p.PoiId,
+            name = p.Name ?? "",
+            lat = p.Latitude,
+            lng = p.Longitude,
+            categoryId = p.CategoryId
+        }).ToList();
+    }
+
+    // ================= LOCATION =================
+    async Task<Location?> GetLocation()
+    {
+        try
+        {
+            return await Geolocation.Default.GetLocationAsync(
+                new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(5)));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    async Task StartTracking()
+    {
+        while (isTracking)
+        {
+            var location = await GetLocation();
+            if (location != null)
+            {
+                lat = location.Latitude;
+                lng = location.Longitude;
+                await JS.InvokeVoidAsync("mapHelper.updateUserLocation", lat, lng);
+            }
+            await Task.Delay(3000);
+        }
+    }
+
+    async Task GoToCurrent()
+    {
+        await JS.InvokeVoidAsync("mapHelper.goToCurrentLocation");
+    }
+
+    // ================= INTERACTION =================
+    async Task FocusPoi(PoiDto poi)
+    {
+        await JS.InvokeVoidAsync("mapHelper.focusToLocation", poi.Latitude, poi.Longitude);
+        await OpenPoiDetail(poi.PoiId);
+    }
+
+    [JSInvokable("OpenPoiDetail")]
+    public async Task OpenPoiDetail(int poiId)
+    {
+        try
+        {
+            var detail = await PoiService.GetPoiDetailAsync(poiId);
+            if (detail == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Không tìm thấy địa điểm");
+                return;
+            }
+            await JS.InvokeVoidAsync("mapHelper.showPoiDetail", detail);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Detail Error: {ex.Message}");
+        }
+    }
+
+    // ================= AUDIO / TTS =================
+    [JSInvokable("HandleAudioLogic")]
+    public async Task HandleAudioLogic(PoiDetailDto data)
+    {
+        if (data == null) return;
+
+        var text = data.Description ?? "";
+
+        // Ưu tiên audio ghi sẵn khi là tiếng Việt
+        if (SelectedLanguage == "vi" && !string.IsNullOrEmpty(data.AudioUrl))
+        {
+            await JS.InvokeVoidAsync("mapHelper.playAudio", data.AudioUrl);
+            return;
+        }
+
+        // TTS với giọng và tốc độ đã chọn
+        await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "speaking-tts");
+
+        try
+        {
+            await TTS.Speak(text, SelectedLanguage, SelectedVoice?.Name, SpeechRate);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"TTS Error: {ex.Message}");
+        }
+        finally
+        {
+            await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "idle");
+        }
+    }
+
+    [JSInvokable("StopTTS")]
+    public async Task StopTTS()
+    {
+        TTS.CancelCurrent();
+        await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "idle");
+    }
+
+    // ================= CLEAN UP =================
+    public void Dispose()
+    {
+        isTracking = false;
+        objRef?.Dispose();
+        TTS.CancelCurrent();
+    }
+}

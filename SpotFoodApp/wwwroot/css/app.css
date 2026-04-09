@@ -189,6 +189,22 @@ h1:focus {
     z-index: 50 !important;
 }
 
+.btn-location {
+    position: absolute;
+    bottom: 550px; 
+    right: 16px;
+    z-index: 1000; 
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #007bff;
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
 /* ================= BOTTOM SHEET ================= */
 .bottom-sheet {
     position: absolute;
@@ -279,3 +295,19 @@ h1:focus {
 .keyboard-visible .map-container {
     bottom: 40%;
 }
+.custom-poi-marker {
+    background: transparent;
+    border: none;
+    text-align: center;
+    line-height: 40px;
+    font-size: 32px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.poi-emoji {
+    transition: transform 0.2s ease;
+}
+
+    .poi-emoji:hover {
+        transform: scale(1.3);
+    }
