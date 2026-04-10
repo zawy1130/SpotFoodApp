@@ -13,27 +13,36 @@ namespace SpotFoodApp.API.Data
 
         public DbSet<Category> Category{ get; set; }
 
+        public DbSet<PoiTranslation> PoiTranslations { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // POI
-            modelBuilder.Entity<Poi>()
-                .HasKey(p => p.PoiId);
+            base.OnModelCreating(modelBuilder);
 
-            // POI_CONTENT - POI (1-n)
-            modelBuilder.Entity<PoiContent>()
-                .HasOne(pc => pc.Poi)
-                .WithMany(p => p.Contents)
-                .HasForeignKey(pc => pc.PoiId);
+            // POI - POI_TRANSLATION (1-n)
+            modelBuilder.Entity<Poi>()
+                .HasMany(p => p.Translations)
+                .WithOne(t => t.Poi)
+                .HasForeignKey(t => t.PoiId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // POI - POI_CONTENT (1-n)
+            modelBuilder.Entity<Poi>()
+                .HasMany(p => p.Contents)
+                .WithOne(pc => pc.Poi)
+                .HasForeignKey(pc => pc.PoiId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // POI_CONTENT - AUDIO_FILE (n-1)
             modelBuilder.Entity<PoiContent>()
                 .HasOne(pc => pc.Audio)
-                .WithMany(a => a.Contents)
-                .HasForeignKey(pc => pc.AudioId);
+                .WithMany(a => a.Contents)   // Nếu AudioFile có ICollection<PoiContent>
+                .HasForeignKey(pc => pc.AudioId)
+                .OnDelete(DeleteBehavior.SetNull);
 
-            // UNIQUE (poi_id + language_code)
-            modelBuilder.Entity<PoiContent>()
-                .HasIndex(pc => new { pc.PoiId})
+            // UNIQUE constraint cho (poi_id + language_code)
+            modelBuilder.Entity<PoiTranslation>()
+                .HasIndex(t => new { t.PoiId, t.LanguageCode })
                 .IsUnique();
         }
     }

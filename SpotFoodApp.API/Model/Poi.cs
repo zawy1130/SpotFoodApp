@@ -18,7 +18,7 @@ namespace SpotFoodApp.API.Model
 
         [Column("longitude")]
         public double Longitude { get; set; }
-        
+
         [Column("image_url")]
         public string? ImageUrl { get; set; }
 
@@ -34,8 +34,13 @@ namespace SpotFoodApp.API.Model
         [Column("created_at")]
         public DateTime? CreatedAt { get; set; }
 
+        // Navigation Properties
         public Category? Category { get; set; }
-        // navigation
+
+        // Nội dung gốc (audio + description tiếng Việt)
         public ICollection<PoiContent>? Contents { get; set; }
+
+        // Bản dịch đa ngôn ngữ 
+        public ICollection<PoiTranslation>? Translations { get; set; }
     }
 }
