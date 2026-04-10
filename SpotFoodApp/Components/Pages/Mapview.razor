@@ -65,6 +65,37 @@
         </div>
     </div>
 
+    <!-- FLOATING TTS CONTROLS -->
+    @* <div class="tts-floating-panel">
+        <button class="btn-tts" @onclick="ToggleTTSSettings">🔊</button>
+
+        @if (ShowTTSSettings)
+        {
+            <div class="tts-card">
+                <div class="tts-header">
+                    <span>Cài đặt TTS</span>
+                    <button class="close-tts" @onclick="ToggleTTSSettings">✕</button>
+                </div>
+
+                <div class="tts-row">
+                    <label>Giọng đọc</label>
+                    <select @bind="SelectedVoiceName">
+                        @foreach (var v in AvailableVoices)
+                        {
+                            <option value="@v.Name">@v.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="tts-row">
+                    <label>Tốc độ: <span class="rate-value">@SpeechRate.ToString("0.0")x</span></label>
+                    <input type="range" min="0.5" max="2.0" step="0.1"
+                           value="@SpeechRate" @oninput="OnSpeedChanged" />
+                </div>
+            </div>
+        }
+    </div> *@
+
     <!-- BUTTON CURRENT LOCATION -->
     <button class="btn-location" @onclick="GoToCurrent">
         📍
@@ -97,25 +128,21 @@
     List<PoiDto> AllPois = new();
     List<PoiDto> FilteredPois = new();
 
-    // ================= NGÔN NGỮ & TTS SETTINGS =================
+    // ================= NGÔN NGỮ =================
     List<LanguageOption> Languages = new()
     {
         new LanguageOption { Code = "vi", Name = "🇻🇳 Tiếng Việt" },
-
-        new LanguageOption { Code = "ja", Name = "🇯🇵 日本語" },
         new LanguageOption { Code = "en", Name = "🇺🇸 English" },
-        new LanguageOption { Code = "fr", Name = "🇫🇷 Français" },
-        new LanguageOption { Code = "ko", Name = "🇰🇷 한국어" },
-        new LanguageOption { Code = "zh", Name = "🇨🇳 中文" },
-        new LanguageOption { Code = "es", Name = "🇪🇸 Español" },
-        new LanguageOption { Code = "de", Name = "🇩🇪 Deutsch" },
-        new LanguageOption { Code = "ru", Name = "🇷🇺 Русский" }
+        new LanguageOption { Code = "ja", Name = "🇯🇵 日本語" },
+        new LanguageOption { Code = "zh", Name = "🇨🇳 中文" }
     };
 
     string SelectedLanguage = "vi";
     List<Locale> AvailableVoices = new();
     Locale? SelectedVoice = null;
-    double SpeechRate = 1.0;
+    string SelectedVoiceName = "";
+    double SpeechRate = 0.9;
+    bool ShowTTSSettings = false;
 
     DotNetObjectReference<Mapview>? objRef;
 
@@ -141,35 +168,16 @@
 
             var mapData = ConvertToPlaces(FilteredPois);
             await JS.InvokeVoidAsync("mapHelper.initMap", lat, lng, mapData, objRef);
+            // await LoadAvailableVoices();
 
             _ = StartTracking();
-            await LoadAvailableVoices();   // Load giọng đọc ban đầu
         }
     }
 
     void OnLanguageChanged(ChangeEventArgs e)
     {
         SelectedLanguage = e.Value?.ToString() ?? "vi";
-        _ = LoadAvailableVoices();
-    }
-
-    async Task LoadAvailableVoices()
-    {
-        try
-        {
-            var locales = await TextToSpeech.Default.GetLocalesAsync();
-            AvailableVoices = locales
-                .Where(l => l.Language.StartsWith(SelectedLanguage, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(l => l.Name)
-                .ToList();
-
-            SelectedVoice = AvailableVoices.FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Load voices error: {ex.Message}");
-            AvailableVoices.Clear();
-        }
+        _ = LoadPoiFromApi(); 
     }
 
     // ================= LOAD DATA =================
@@ -177,7 +185,9 @@
     {
         try
         {
-            var result = await Http.GetFromJsonAsync<List<CategoryDto>>("http://10.0.2.2:5205/api/categories");
+            var result = await Http.GetFromJsonAsync<List<CategoryDto>>(
+                "http://10.0.2.2:5205/api/categories");
+
             if (result != null)
             {
                 result.Insert(0, new CategoryDto { CategoryId = 0, CategoryName = "Tất cả" });
@@ -194,7 +204,9 @@
     {
         try
         {
-            var result = await Http.GetFromJsonAsync<List<PoiDto>>("http://10.0.2.2:5205/api/pois");
+            var result = await Http.GetFromJsonAsync<List<PoiDto>>(
+                $"http://10.0.2.2:5205/api/pois?language={SelectedLanguage}");
+
             if (result != null)
             {
                 AllPois = result;
@@ -279,12 +291,14 @@
     {
         try
         {
-            var detail = await PoiService.GetPoiDetailAsync(poiId);
+            var detail = await PoiService.GetPoiDetailAsync(poiId, SelectedLanguage);
+
             if (detail == null)
             {
                 await JS.InvokeVoidAsync("alert", "Không tìm thấy địa điểm");
                 return;
             }
+
             await JS.InvokeVoidAsync("mapHelper.showPoiDetail", detail);
         }
         catch (Exception ex)
@@ -292,6 +306,42 @@
             Console.WriteLine($"Detail Error: {ex.Message}");
         }
     }
+
+    // async Task LoadAvailableVoices()
+    // {
+    //     try
+    //     {
+    //         var locales = await TextToSpeech.Default.GetLocalesAsync();
+    //         AvailableVoices = locales
+    //             .Where(l => l.Language.StartsWith(SelectedLanguage, StringComparison.OrdinalIgnoreCase))
+    //             .ToList();
+
+    //         SelectedVoice = AvailableVoices.FirstOrDefault();
+    //         SelectedVoiceName = SelectedVoice?.Name ?? "";
+    //     }
+    //     catch { }
+    // }
+
+    // void ToggleTTSSettings()
+    // {
+    //     ShowTTSSettings = !ShowTTSSettings;
+    //     StateHasChanged();
+    // }
+
+    // void OnVoiceChanged(ChangeEventArgs e)
+    // {
+    //     SelectedVoiceName = e.Value?.ToString() ?? "";
+    //     SelectedVoice = AvailableVoices.FirstOrDefault(v => v.Name == SelectedVoiceName);
+    // }
+
+    // void OnSpeedChanged(ChangeEventArgs e)
+    // {
+    //     if (double.TryParse(e.Value?.ToString(), out double rate))
+    //     {
+    //         SpeechRate = Math.Clamp(rate, 0.5, 2.0);
+    //         StateHasChanged();
+    //     }
+    // }
 
     // ================= AUDIO / TTS =================
     [JSInvokable("HandleAudioLogic")]
@@ -301,19 +351,17 @@
 
         var text = data.Description ?? "";
 
-        // Ưu tiên audio ghi sẵn khi là tiếng Việt
         if (SelectedLanguage == "vi" && !string.IsNullOrEmpty(data.AudioUrl))
         {
             await JS.InvokeVoidAsync("mapHelper.playAudio", data.AudioUrl);
             return;
         }
 
-        // TTS với giọng và tốc độ đã chọn
         await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "speaking-tts");
 
         try
         {
-            await TTS.Speak(text, SelectedLanguage, SelectedVoice?.Name, SpeechRate);
+            await TTS.Speak(text, SelectedLanguage);
         }
         catch (Exception ex)
         {
@@ -332,7 +380,6 @@
         await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "idle");
     }
 
-    // ================= CLEAN UP =================
     public void Dispose()
     {
         isTracking = false;

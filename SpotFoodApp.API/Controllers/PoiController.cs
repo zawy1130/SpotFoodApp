@@ -14,15 +14,71 @@ public class PoisController : ControllerBase
     }
 
     // 📍 1. Lấy danh sách POI (dùng cho map)
+    //[HttpGet]
+    //public async Task<IActionResult> GetAll()
+    //{
+    //    var pois = await _context.Pois
+    //        .AsNoTracking()
+    //        .Select(p => new
+    //        {
+    //            p.PoiId,
+    //            p.Name,
+    //            p.Latitude,
+    //            p.Longitude,
+    //            p.CategoryId
+    //        })
+    //        .ToListAsync();
+
+    //    return Ok(pois);
+    //}
+
+    // 📄 2. Chi tiết POI + audio
+    //[HttpGet("{id}")]
+    //public async Task<IActionResult> GetDetail(int id)
+    //{
+    //    var poi = await _context.Pois
+    //        .AsNoTracking()
+    //        .Include(p => p.Contents!)
+    //        .ThenInclude(c => c.Audio)
+    //        .FirstOrDefaultAsync(p => p.PoiId == id);
+
+    //    if (poi == null)
+    //        return NotFound();
+
+    //    var content = poi.Contents?.FirstOrDefault();
+
+    //    var result = new
+    //    {
+    //        poi.PoiId,
+    //        poi.Name,
+    //        poi.Latitude,
+    //        poi.Longitude,
+    //        poi.ImageUrl,
+    //        poi.Address,
+    //        poi.MapLink,
+
+    //        Description = content?.Description ?? "",
+    //        AudioUrl = content?.Audio?.FilePath ?? ""
+    //    };
+
+    //    return Ok(result);
+    //}
+
+    // 📍 1. Lấy danh sách POI theo ngôn ngữ (dùng cho map)
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(string language = "vi")
     {
         var pois = await _context.Pois
             .AsNoTracking()
             .Select(p => new
             {
                 p.PoiId,
-                p.Name,
+                // Lấy tên theo ngôn ngữ, fallback về tên gốc nếu không có bản dịch
+                Name = p.Translations!
+                    .Where(t => t.LanguageCode == language)
+                    .Select(t => t.Name)
+                    .FirstOrDefault() ?? p.Name,
+
                 p.Latitude,
                 p.Longitude,
                 p.CategoryId
@@ -32,33 +88,40 @@ public class PoisController : ControllerBase
         return Ok(pois);
     }
 
-    // 📄 2. Chi tiết POI + audio
+    // 📄 2. Chi tiết POI theo ngôn ngữ + audio
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetDetail(int id)
+    public async Task<IActionResult> GetDetail(int id, string language = "vi")
     {
         var poi = await _context.Pois
             .AsNoTracking()
+            .Include(p => p.Translations!)
             .Include(p => p.Contents!)
-            .ThenInclude(c => c.Audio)
+                .ThenInclude(c => c.Audio)
             .FirstOrDefaultAsync(p => p.PoiId == id);
 
         if (poi == null)
             return NotFound();
+
+        // Lấy bản dịch theo ngôn ngữ, fallback về tiếng Việt
+        var translation = poi.Translations?
+            .FirstOrDefault(t => t.LanguageCode == language)
+            ?? poi.Translations?.FirstOrDefault(t => t.LanguageCode == "vi");
 
         var content = poi.Contents?.FirstOrDefault();
 
         var result = new
         {
             poi.PoiId,
-            poi.Name,
-            poi.Latitude,
-            poi.Longitude,
-            poi.ImageUrl,
-            poi.Address,
-            poi.MapLink,
+            Name = translation?.Name ?? poi.Name,
+            Description = translation?.Description ?? content?.Description ?? "",
+            Address = translation?.Address ?? poi.Address,
+            ImageUrl = poi.ImageUrl,
+            MapLink = poi.MapLink,
 
-            Description = content?.Description ?? "",
-            AudioUrl = content?.Audio?.FilePath ?? ""
+            // Chỉ trả Audio khi chọn tiếng Việt
+            AudioUrl = (language == "vi" && content?.Audio != null)
+                       ? content.Audio.FilePath ?? ""
+                       : ""
         };
 
         return Ok(result);
