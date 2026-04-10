@@ -40,4 +40,10 @@ namespace SpotFoodApp.DTO
         public double lng { get; set; }
         public int? categoryId { get; set; }
     }
+
+    public class LanguageOption
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
 }
