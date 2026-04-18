@@ -29,7 +29,7 @@
         </div>
     </div>
 
-    <!-- CATEGORY -->
+    <!-- CATEGORY BAR -->
     <div class="category-bar">
         @foreach (var c in Categories)
         {
@@ -45,7 +45,7 @@
         <div id="map"></div>
     </div>
 
-    <!-- POPUP -->
+    <!-- POI DETAIL POPUP -->
     <div id="poi-overlay" class="poi-overlay hidden">
         <div class="poi-card">
             <img id="poi-image" />
@@ -54,17 +54,6 @@
                 <h3 id="poi-name"></h3>
                 <p id="poi-desc"></p>
                 <p id="poi-address" class="poi-address"></p>
-
-                <!-- Nút bật/tắt Auto Narration -->
-                <div style="margin: 12px 0;">
-                    <button class="btn-auto-narration"
-                            style="width: 100%; padding: 12px; border-radius: 16px;
-                        background: @(IsAutoNarrationEnabled ? "#22c55e" : "#64748b");
-                        color: white; border: none; font-weight: 600;"
-                            @onclick="ToggleAutoNarration">
-                        @(IsAutoNarrationEnabled ? "🔊 Tắt tự động thuyết minh" : "🔊 Bật tự động thuyết minh")
-                    </button>
-                </div>
 
                 <div class="poi-actions">
                     <a id="poi-map" target="_blank" rel="noopener">📍 Xem Google Maps</a>
@@ -76,19 +65,41 @@
         </div>
     </div>
 
-    <!-- BUTTON CURRENT LOCATION -->
+    <!-- FLOATING AUTO NARRATION BUTTON -->
+    <div class="tts-floating-panel">
+        <button class="btn-auto-narration"
+                style="width: 100%; padding: 12px; border-radius: 16px;
+            background: @(IsAutoNarrationEnabled ? "#22c55e" : "#64748b");
+            color: white; border: none; font-weight: 600;"
+                @onclick="ToggleAutoNarration">
+            @(IsAutoNarrationEnabled ? "🔊 Bật Auto" : "🔊 Tắt Auto")
+        </button>
+    </div>
+
+    <!-- CURRENT LOCATION BUTTON -->
     <button class="btn-location" @onclick="GoToCurrent">
         📍
     </button>
 
-    <!-- BOTTOM SHEET -->
+    <!-- BOTTOM SHEET - Thông tin nhanh POI -->
     <div class="bottom-sheet" id="bottomSheet">
         <div class="drag-bar" id="dragBar"></div>
         <div class="poi-list">
             @foreach (var p in FilteredPois)
             {
-                <div class="poi-item" @onclick="() => FocusPoi(p)">
-                    <div class="poi-title">@p.Name</div>
+                bool isHighlighting = CurrentlyHighlightingPoiId == p.PoiId;
+
+                <div class="poi-item @(isHighlighting ? "highlight" : "")"
+                     @onclick="() => FocusPoi(p)">
+                    
+                    <img src="@(p.ImageUrl ?? "/img/default.png")"
+                         class="poi-quick-image"
+                         alt="@p.Name" />
+
+                    <div class="poi-info">
+                        <div class="poi-title">@p.Name</div>
+                        <div class="poi-address-quick">@p.Address</div>
+                    </div>
                 </div>
             }
         </div>
@@ -124,9 +135,13 @@
     Queue<int> NarrationQueue = new();
     int? CurrentlyNarratingPoiId = null;
 
+    // ================= HIGHLIGHT =================
+    int? CurrentlyHighlightingPoiId { get; set; }
+
     DotNetObjectReference<Mapview>? objRef;
 
-    // ================= INIT =================
+    // ================= INITIALIZATION =================
+
     protected override async Task OnInitializedAsync()
     {
         await LoadCategoryFromApi();
@@ -153,13 +168,14 @@
         }
     }
 
+    // ================= LANGUAGE & DATA =================
+
     void OnLanguageChanged(ChangeEventArgs e)
     {
         SelectedLanguage = e.Value?.ToString() ?? "vi";
         _ = LoadPoiFromApi();
     }
 
-    // ================= LOAD DATA (giữ nguyên) =================
     async Task LoadCategoryFromApi()
     {
         try
@@ -213,6 +229,7 @@
     }
 
     // ================= LOCATION =================
+
     async Task<Location?> GetLocation()
     {
         try
@@ -244,18 +261,40 @@
         await JS.InvokeVoidAsync("mapHelper.goToCurrentLocation");
     }
 
-    // ================= AUTO NARRATION =================
+    // ================= AUTO NARRATION & DISTANCE CHECK =================
+
+    /// <summary>
+    /// Kiểm tra POI gần và quản lý narration. Dừng nếu di chuyển ra xa.
+    /// </summary>
     async Task CheckNearbyPois()
     {
         if (!IsAutoNarrationEnabled) return;
 
+        // Nếu đang narration, kiểm tra khoảng cách
+        if (CurrentlyNarratingPoiId.HasValue)
+        {
+            var currentPoi = AllPois.FirstOrDefault(p => p.PoiId == CurrentlyNarratingPoiId.Value);
+            if (currentPoi != null)
+            {
+                double distance = CalculateDistance(lat, lng, currentPoi.Latitude, currentPoi.Longitude);
+                if (distance > 35) // Ra xa > 35m → dừng ngay
+                {
+                    await StopCurrentNarration();
+                    return;
+                }
+            }
+        }
+
+        // Thêm POI mới vào queue nếu trong phạm vi 50m
         foreach (var poi in AllPois)
         {
-            if (NarratedPois.Contains(poi.PoiId)) continue;
+            if (NarratedPois.Contains(poi.PoiId) ||
+                NarrationQueue.Contains(poi.PoiId) ||
+                CurrentlyNarratingPoiId == poi.PoiId)
+                continue;
 
             double distance = CalculateDistance(lat, lng, poi.Latitude, poi.Longitude);
-
-            if (distance <= 50 && !NarrationQueue.Contains(poi.PoiId))
+            if (distance <= 50)
             {
                 NarrationQueue.Enqueue(poi.PoiId);
             }
@@ -264,6 +303,20 @@
         await TryNarrateNextPoi();
     }
 
+    /// <summary>
+    /// Dừng narration hiện tại (TTS + Audio) và xóa highlight
+    /// </summary>
+    async Task StopCurrentNarration()
+    {
+        TTS.CancelCurrent();
+        await JS.InvokeVoidAsync("mapHelper.stopCurrentAudio");
+        await ClearHighlight();
+        CurrentlyNarratingPoiId = null;
+    }
+
+    /// <summary>
+    /// Thực hiện narration cho POI tiếp theo (chỉ khi cách <= 20m)
+    /// </summary>
     async Task TryNarrateNextPoi()
     {
         if (!IsAutoNarrationEnabled || NarrationQueue.Count == 0 || CurrentlyNarratingPoiId.HasValue)
@@ -280,7 +333,7 @@
             CurrentlyNarratingPoiId = nextPoiId;
             NarrationQueue.Dequeue();
 
-            await OpenPoiDetail(nextPoiId);
+            await HighlightPoi(nextPoiId);
             await HandleAutoNarration(nextPoiId);
         }
     }
@@ -290,7 +343,7 @@
         var detail = await PoiService.GetPoiDetailAsync(poiId, SelectedLanguage);
         if (detail == null)
         {
-            CurrentlyNarratingPoiId = null;
+            await StopCurrentNarration();
             return;
         }
 
@@ -344,10 +397,28 @@
             NarrationQueue.Clear();
             CurrentlyNarratingPoiId = null;
             TTS.CancelCurrent();
+            _ = ClearHighlight();
         }
     }
 
-    // ================= INTERACTION & AUDIO (giữ nguyên) =================
+    // ================= HIGHLIGHT =================
+
+    async Task HighlightPoi(int poiId)
+    {
+        CurrentlyHighlightingPoiId = poiId;
+        await JS.InvokeVoidAsync("mapHelper.highlightPoi", poiId);
+        StateHasChanged();
+    }
+
+    async Task ClearHighlight()
+    {
+        CurrentlyHighlightingPoiId = null;
+        await JS.InvokeVoidAsync("mapHelper.clearHighlight");
+        StateHasChanged();
+    }
+
+    // ================= USER INTERACTION =================
+
     async Task FocusPoi(PoiDto poi)
     {
         await JS.InvokeVoidAsync("mapHelper.focusToLocation", poi.Latitude, poi.Longitude);
@@ -365,6 +436,8 @@
                 await JS.InvokeVoidAsync("alert", "Không tìm thấy địa điểm");
                 return;
             }
+
+            await HighlightPoi(poiId);
             await JS.InvokeVoidAsync("mapHelper.showPoiDetail", detail);
         }
         catch (Exception ex)
@@ -409,10 +482,12 @@
         await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "idle");
     }
 
+    // ================= CLEANUP =================
     public void Dispose()
     {
         isTracking = false;
         objRef?.Dispose();
         TTS.CancelCurrent();
+        _ = ClearHighlight();
     }
 }

@@ -7,7 +7,6 @@ window.mapHelper = {
     dotNetRef: null,
     currentAudio: null,
     currentPoiData: null,
-    isTTSMode: false,
 
     // ================= ICON =================
     createIcon: (url, size = 30) => L.icon({
@@ -34,7 +33,45 @@ window.mapHelper = {
         iconAnchor: [22, 45]
     }),
 
-    // ================= BOTTOM SHEET =================
+    // ================= HIGHLIGHT =================
+    currentlyHighlightedMarker: null,
+    originalIcon: null,
+
+    highlightPoi: function (poiId) {
+        this.clearHighlight();
+
+        const marker = this.placeMarkers.find(m => m.poiId === poiId);
+        if (!marker) return;
+
+        this.currentlyHighlightedMarker = marker;
+        this.originalIcon = marker.getIcon();
+
+        const highlightIcon = L.icon({
+            iconUrl: this.originalIcon.options.iconUrl,
+            iconSize: [48, 48],
+            iconAnchor: [24, 48],
+            className: 'highlighted-poi-marker'
+        });
+
+        marker.setIcon(highlightIcon);
+        marker.openTooltip();
+
+        this.map.flyTo(marker.getLatLng(), 17.5, {
+            duration: 1.2,
+            easeLinearity: 0.25
+        });
+    },
+
+    clearHighlight: function () {
+        if (this.currentlyHighlightedMarker && this.originalIcon) {
+            this.currentlyHighlightedMarker.setIcon(this.originalIcon);
+            this.currentlyHighlightedMarker.closeTooltip();
+        }
+        this.currentlyHighlightedMarker = null;
+        this.originalIcon = null;
+    },
+
+    // ================= BOTTOM SHEET & MAP INIT =================
     initBottomSheet() {
         const sheet = document.getElementById("bottomSheet");
         const dragBar = document.getElementById("dragBar");
@@ -42,75 +79,48 @@ window.mapHelper = {
         let startY = 0;
         let isDragging = false;
 
-        const start = (y) => {
-            startY = y;
-            isDragging = true;
-        };
-
+        const start = (y) => { startY = y; isDragging = true; };
         const move = (y) => {
             if (!isDragging) return;
             const delta = y - startY;
             sheet.style.transform = `translateY(${Math.max(0, 68 + delta / 5)}%)`;
         };
-
         const end = () => {
             isDragging = false;
+            sheet.style.transform = "";
             if (sheet.style.transform.includes("0%")) {
                 sheet.classList.add("expanded");
             } else {
                 sheet.classList.remove("expanded");
             }
-            sheet.style.transform = "";
         };
 
-        // Mobile
         dragBar.addEventListener("touchstart", e => start(e.touches[0].clientY));
         dragBar.addEventListener("touchmove", e => move(e.touches[0].clientY));
         dragBar.addEventListener("touchend", end);
 
-        // Desktop (fallback)
         dragBar.addEventListener("mousedown", e => start(e.clientY));
         window.addEventListener("mousemove", e => move(e.clientY));
         window.addEventListener("mouseup", end);
     },
 
-    // ================= INIT MAP =================
     initMap(lat, lng, places, dotnetHelper) {
         this.dotNetRef = dotnetHelper;
         this.userLatLng = [lat, lng];
 
-        this.map = L.map('map', {
-            center: this.userLatLng,
-            zoom: 16,
-            zoomControl: false
-        });
+        this.map = L.map('map', { center: this.userLatLng, zoom: 16, zoomControl: false });
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png')
-            .addTo(this.map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(this.map);
 
-        // Marker vị trí user
         this.marker = L.marker(this.userLatLng, { icon: this.userIcon }).addTo(this.map);
 
-        // Render POI ban đầu
         this.updatePlaces(places);
-
-        // Kéo map → tắt follow
-        this.map.on('dragstart', () => this.isFollowing = false);
-
-        // Ẩn/hiện tooltip theo zoom
-        this.map.on('zoomend', () => {
-            const zoom = this.map.getZoom();
-            this.placeMarkers.forEach(m =>
-                zoom >= 16 ? m.openTooltip() : m.closeTooltip()
-            );
-        });
-
         this.initBottomSheet();
+
+        this.map.on('dragstart', () => this.isFollowing = false);
     },
 
-    // ================= POI =================
     updatePlaces(places) {
-        // Xóa marker cũ
         this.placeMarkers.forEach(m => this.map.removeLayer(m));
         this.placeMarkers = [];
 
@@ -120,6 +130,8 @@ window.mapHelper = {
             const marker = L.marker([p.lat, p.lng], {
                 icon: this.getIconByCategory(p.categoryId)
             }).addTo(this.map);
+
+            marker.poiId = p.poiId;
 
             marker.bindTooltip(p.name, {
                 direction: 'top',
@@ -134,10 +146,7 @@ window.mapHelper = {
         });
 
         if (bounds.length > 0) {
-            this.map.fitBounds(bounds, {
-                padding: [50, 50],
-                maxZoom: 17
-            });
+            this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
         }
     },
 
@@ -155,7 +164,6 @@ window.mapHelper = {
         }
     },
 
-    // ================= LOCATION =================
     updateUserLocation(lat, lng) {
         this.userLatLng = [lat, lng];
         if (this.marker) this.marker.setLatLng(this.userLatLng);
@@ -171,29 +179,21 @@ window.mapHelper = {
         this.map.setView(this.userLatLng, 16, { animate: true });
     },
 
-    // ================= AUDIO & TTS =================
+    // ================= AUDIO =================
     playAudio(audioUrl) {
-        const btn = document.getElementById("btn-audio");
         const API = "http://10.0.2.2:5205";
-
-        const fullUrl = audioUrl.startsWith('http')
-            ? audioUrl
+        const fullUrl = audioUrl.startsWith('http') ? audioUrl
             : API + (audioUrl.startsWith('/') ? '' : '/') + audioUrl;
 
-        // Dừng audio cũ nếu đang phát
         if (this.currentAudio) {
             this.currentAudio.pause();
             this.currentAudio = null;
         }
 
         this.currentAudio = new Audio(fullUrl);
+        this.currentAudio.play().catch(err => console.error("Audio play error:", err));
 
-        this.currentAudio.play().catch(err => {
-            console.error("Audio play error:", err);
-            this.setAudioButtonState("idle");
-        });
-
-        this.setAudioButtonState("playing-audio");   // Thêm trạng thái riêng cho audio
+        this.setAudioButtonState("playing-audio");
 
         this.currentAudio.onended = () => {
             this.setAudioButtonState("idle");
@@ -201,7 +201,14 @@ window.mapHelper = {
         };
     },
 
-    // Trạng thái nút Audio/TTS
+    stopCurrentAudio: function () {
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio = null;
+        }
+        this.setAudioButtonState("idle");
+    },
+
     setAudioButtonState(state) {
         const btn = document.getElementById("btn-audio");
         if (!btn) return;
@@ -209,70 +216,46 @@ window.mapHelper = {
         if (state === "idle") {
             btn.innerHTML = `🔊 Nghe thuyết minh`;
             btn.style.background = "#ff5722";
-            btn.style.color = "white";
             btn.onclick = async () => {
-                if (!this.dotNetRef || !this.currentPoiData) return;
-                await this.dotNetRef.invokeMethodAsync("HandleAudioLogic", this.currentPoiData);
+                if (this.dotNetRef && this.currentPoiData) {
+                    await this.dotNetRef.invokeMethodAsync("HandleAudioLogic", this.currentPoiData);
+                }
             };
-            this.isTTSMode = false;
-        }
-        else if (state === "playing-audio") {
+        } else if (state === "playing-audio") {
             btn.innerHTML = `⏸️ Tạm dừng`;
             btn.style.background = "#ff8a65";
-            btn.onclick = () => {
-                if (this.currentAudio) {
-                    this.currentAudio.pause();
-                    this.currentAudio = null;
-                }
-                this.setAudioButtonState("idle");
-            };
-        }
-        else if (state === "speaking-tts") {
+            btn.onclick = () => this.stopCurrentAudio();
+        } else if (state === "speaking-tts") {
             btn.innerHTML = `⏹️ Dừng`;
             btn.style.background = "#d32f2f";
             btn.onclick = async () => {
-                if (this.dotNetRef) {
-                    await this.dotNetRef.invokeMethodAsync("StopTTS");
-                }
+                if (this.dotNetRef) await this.dotNetRef.invokeMethodAsync("StopTTS");
             };
-            this.isTTSMode = true;
         }
     },
 
-    // Hiển thị chi tiết POI
     showPoiDetail(data) {
         this.currentPoiData = data;
-
         document.getElementById("poi-name").innerText = data.name || data.Name || "";
         document.getElementById("poi-desc").innerText = data.description || data.Description || "";
         document.getElementById("poi-address").innerText = data.address || data.Address || "";
         document.getElementById("poi-image").src = data.imageUrl || data.ImageUrl || "/img/default.png";
         document.getElementById("poi-map").href = data.mapLink || data.MapLink || "#";
 
-        const btn = document.getElementById("btn-audio");
-        btn.style.display = "flex";
-
-        this.setAudioButtonState("idle");   // Luôn reset về idle khi mở popup mới
-
         document.getElementById("poi-overlay").classList.remove("hidden");
+        this.setAudioButtonState("idle");
     },
 
-    // Đóng overlay + dừng hết audio & TTS
     closeOverlay() {
-        const overlay = document.getElementById("poi-overlay");
-        overlay.classList.add("hidden");
+        document.getElementById("poi-overlay").classList.add("hidden");
 
-        // Dừng Audio
         if (this.currentAudio) {
             this.currentAudio.pause();
             this.currentAudio = null;
         }
-
-        // Dừng TTS (gọi C#)
         if (this.dotNetRef) {
             this.dotNetRef.invokeMethodAsync("StopTTS").catch(() => { });
         }
-
         this.setAudioButtonState("idle");
     }
 };

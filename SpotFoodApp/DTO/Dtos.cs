@@ -19,6 +19,8 @@ namespace SpotFoodApp.DTO
         public double Latitude { get; set; }
         public double Longitude { get; set; }
         public int CategoryId { get; set; }
+        public string? ImageUrl { get; set; }
+        public string? Address { get; set; }
     }
 
     public class PoiDetailDto

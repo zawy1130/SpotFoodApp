@@ -13,6 +13,124 @@ public class PoisController : ControllerBase
         _context = context;
     }
 
+    // 📍 1. Lấy danh sách POI theo ngôn ngữ (dùng cho map)
+    [HttpGet]
+    public async Task<IActionResult> GetAll(string language = "vi")
+    {
+        var pois = await _context.Pois
+            .AsNoTracking()
+            .Select(p => new
+            {
+                p.PoiId,
+                // Lấy tên theo ngôn ngữ, fallback về tên gốc nếu không có bản dịch
+                Name = p.Translations!
+                    .Where(t => t.LanguageCode == language)
+                    .Select(t => t.Name)
+                    .FirstOrDefault() ?? p.Name,
+
+                p.Latitude,
+                p.Longitude,
+                p.CategoryId,
+                p.ImageUrl,
+                p.Address
+            })
+            .ToListAsync();
+
+        return Ok(pois);
+    }
+
+    // 📄 2. Chi tiết POI theo ngôn ngữ + audio
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetDetail(int id, string language = "vi")
+    {
+        var poi = await _context.Pois
+            .AsNoTracking()
+            .Include(p => p.Translations!)
+            .Include(p => p.Contents!)
+                .ThenInclude(c => c.Audio)
+            .FirstOrDefaultAsync(p => p.PoiId == id);
+
+        if (poi == null)
+            return NotFound();
+
+        // Lấy bản dịch theo ngôn ngữ, fallback về tiếng Việt
+        var translation = poi.Translations?
+            .FirstOrDefault(t => t.LanguageCode == language)
+            ?? poi.Translations?.FirstOrDefault(t => t.LanguageCode == "vi");
+
+        var content = poi.Contents?.FirstOrDefault();
+
+        var result = new
+        {
+            poi.PoiId,
+            Name = translation?.Name ?? poi.Name,
+            Description = translation?.Description ?? content?.Description ?? "",
+            Address = translation?.Address ?? poi.Address,
+            ImageUrl = poi.ImageUrl,
+            MapLink = poi.MapLink,
+
+            // Chỉ trả Audio khi chọn tiếng Việt
+            AudioUrl = (language == "vi" && content?.Audio != null)
+                       ? content.Audio.FilePath ?? ""
+                       : ""
+        };
+
+        return Ok(result);
+    }
+
+
+    // 📂 4. Lọc theo category
+    [HttpGet("category/{categoryId}")]
+    public async Task<IActionResult> GetByCategory(int categoryId)
+    {
+        var pois = await _context.Pois
+            .AsNoTracking()
+            .Where(p => p.CategoryId == categoryId)
+            .Select(p => new
+            {
+                p.PoiId,
+                p.Name,
+                p.Latitude,
+                p.Longitude,
+                p.ImageUrl
+            })
+            .ToListAsync();
+
+        return Ok(pois);
+    }
+
+    //// 🔥 3. POI gần vị trí (GPS)
+    //// GET: api/pois/nearby?lat=...&lng=...&radius=100
+    //[HttpGet("nearby")]
+    //public async Task<IActionResult> GetNearby(double lat, double lng, double radius = 100)
+    //{
+    //    var pois = await _context.Pois
+    //        .AsNoTracking()
+    //        .Select(p => new
+    //        {
+    //            p.PoiId,
+    //            p.Name,
+    //            p.Latitude,
+    //            p.Longitude
+    //        })
+    //        .ToListAsync();
+
+    //    var result = pois
+    //        .Select(p => new
+    //        {
+    //            p.PoiId,
+    //            p.Name,
+    //            p.Latitude,
+    //            p.Longitude,
+    //            Distance = GetDistance(lat, lng, p.Latitude, p.Longitude)
+    //        })
+    //        .Where(p => p.Distance <= radius)
+    //        .OrderBy(p => p.Distance)
+    //        .ToList();
+
+    //    return Ok(result);
+    //}
+
     // 📍 1. Lấy danh sách POI (dùng cho map)
     //[HttpGet]
     //public async Task<IActionResult> GetAll()
@@ -64,121 +182,6 @@ public class PoisController : ControllerBase
     //    return Ok(result);
     //}
 
-    // 📍 1. Lấy danh sách POI theo ngôn ngữ (dùng cho map)
-    [HttpGet]
-    public async Task<IActionResult> GetAll(string language = "vi")
-    {
-        var pois = await _context.Pois
-            .AsNoTracking()
-            .Select(p => new
-            {
-                p.PoiId,
-                // Lấy tên theo ngôn ngữ, fallback về tên gốc nếu không có bản dịch
-                Name = p.Translations!
-                    .Where(t => t.LanguageCode == language)
-                    .Select(t => t.Name)
-                    .FirstOrDefault() ?? p.Name,
-
-                p.Latitude,
-                p.Longitude,
-                p.CategoryId
-            })
-            .ToListAsync();
-
-        return Ok(pois);
-    }
-
-    // 📄 2. Chi tiết POI theo ngôn ngữ + audio
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetDetail(int id, string language = "vi")
-    {
-        var poi = await _context.Pois
-            .AsNoTracking()
-            .Include(p => p.Translations!)
-            .Include(p => p.Contents!)
-                .ThenInclude(c => c.Audio)
-            .FirstOrDefaultAsync(p => p.PoiId == id);
-
-        if (poi == null)
-            return NotFound();
-
-        // Lấy bản dịch theo ngôn ngữ, fallback về tiếng Việt
-        var translation = poi.Translations?
-            .FirstOrDefault(t => t.LanguageCode == language)
-            ?? poi.Translations?.FirstOrDefault(t => t.LanguageCode == "vi");
-
-        var content = poi.Contents?.FirstOrDefault();
-
-        var result = new
-        {
-            poi.PoiId,
-            Name = translation?.Name ?? poi.Name,
-            Description = translation?.Description ?? content?.Description ?? "",
-            Address = translation?.Address ?? poi.Address,
-            ImageUrl = poi.ImageUrl,
-            MapLink = poi.MapLink,
-
-            // Chỉ trả Audio khi chọn tiếng Việt
-            AudioUrl = (language == "vi" && content?.Audio != null)
-                       ? content.Audio.FilePath ?? ""
-                       : ""
-        };
-
-        return Ok(result);
-    }
-
-
-    //// 🔥 3. POI gần vị trí (GPS)
-    //// GET: api/pois/nearby?lat=...&lng=...&radius=100
-    //[HttpGet("nearby")]
-    //public async Task<IActionResult> GetNearby(double lat, double lng, double radius = 100)
-    //{
-    //    var pois = await _context.Pois
-    //        .AsNoTracking()
-    //        .Select(p => new
-    //        {
-    //            p.PoiId,
-    //            p.Name,
-    //            p.Latitude,
-    //            p.Longitude
-    //        })
-    //        .ToListAsync();
-
-    //    var result = pois
-    //        .Select(p => new
-    //        {
-    //            p.PoiId,
-    //            p.Name,
-    //            p.Latitude,
-    //            p.Longitude,
-    //            Distance = GetDistance(lat, lng, p.Latitude, p.Longitude)
-    //        })
-    //        .Where(p => p.Distance <= radius)
-    //        .OrderBy(p => p.Distance)
-    //        .ToList();
-
-    //    return Ok(result);
-    //}
-
-    // 📂 4. Lọc theo category
-    [HttpGet("category/{categoryId}")]
-    public async Task<IActionResult> GetByCategory(int categoryId)
-    {
-        var pois = await _context.Pois
-            .AsNoTracking()
-            .Where(p => p.CategoryId == categoryId)
-            .Select(p => new
-            {
-                p.PoiId,
-                p.Name,
-                p.Latitude,
-                p.Longitude,
-                p.ImageUrl
-            })
-            .ToListAsync();
-
-        return Ok(pois);
-    }
 
     // 📐 Hàm tính khoảng cách (mét)
     private double GetDistance(double lat1, double lon1, double lat2, double lon2)
