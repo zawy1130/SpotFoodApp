@@ -26,14 +26,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()      // Cho phép tất cả (dùng cho dev)
+        policy.AllowAnyOrigin()     
               .AllowAnyMethod()
               .AllowAnyHeader();
 
     });
 });
 
-// Kestrel - Nghe trên tất cả IP (quan trọng để Android Emulator kết nối)
+// Kestrel - Nghe trên tất cả IP 
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenAnyIP(5205);   // Port 5205
@@ -53,7 +53,7 @@ if (app.Environment.IsDevelopment())
 // Quan trọng: UseCors phải đặt ở vị trí này
 app.UseCors("AllowAll");
 
-// app.UseHttpsRedirection();   // Tạm comment vì đang dùng HTTP
+// app.UseHttpsRedirection();  
 
 app.UseAuthorization();
 
