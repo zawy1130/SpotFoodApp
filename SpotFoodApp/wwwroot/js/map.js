@@ -181,7 +181,7 @@ window.mapHelper = {
 
     // ================= AUDIO =================
     playAudio(audioUrl) {
-        const API = "http://10.0.2.2:5205";
+        const API = "https://sony-site.somee.com";
         const fullUrl = audioUrl.startsWith('http') ? audioUrl
             : API + (audioUrl.startsWith('/') ? '' : '/') + audioUrl;
 
