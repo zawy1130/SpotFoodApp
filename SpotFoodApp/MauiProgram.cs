@@ -17,11 +17,12 @@ namespace SpotFoodApp
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 });
 
-            // 🔥 HttpClient (API)
+            // 🔥 HttpClient (API) - remote hosting (somee)
             builder.Services.AddScoped(sp =>
                 new HttpClient
                 {
-                    BaseAddress = new Uri("http://10.0.2.2:5205/")
+                    // Per request: use the provided base address for the hosted API
+                    BaseAddress = new Uri("https://sony-site.somee.com/")
                 });
 
             // 🔥 Blazor
