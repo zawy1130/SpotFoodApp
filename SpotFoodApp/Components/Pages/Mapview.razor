@@ -180,7 +180,7 @@
     {
         try
         {
-            var result = await Http.GetFromJsonAsync<List<CategoryDto>>("http://10.0.2.2:5205/api/categories");
+            var result = await Http.GetFromJsonAsync<List<CategoryDto>>("http://192.168.2.43:5205/api/categories");
             if (result != null)
             {
                 result.Insert(0, new CategoryDto { CategoryId = 0, CategoryName = "Tất cả" });
@@ -194,7 +194,7 @@
     {
         try
         {
-            var result = await Http.GetFromJsonAsync<List<PoiDto>>($"http://10.0.2.2:5205/api/pois?language={SelectedLanguage}");
+            var result = await Http.GetFromJsonAsync<List<PoiDto>>($"http://192.168.2.43:5205/api/pois?language={SelectedLanguage}");
             if (result != null)
             {
                 AllPois = result;

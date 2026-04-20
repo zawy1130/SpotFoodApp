@@ -21,7 +21,7 @@ namespace SpotFoodApp
             builder.Services.AddScoped(sp =>
                 new HttpClient
                 {
-                    BaseAddress = new Uri("http://10.0.2.2:5205/")
+                    BaseAddress = new Uri("http://192.168.2.43:5205/")
                 });
 
             // 🔥 Blazor

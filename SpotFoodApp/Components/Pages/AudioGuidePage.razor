@@ -70,7 +70,7 @@
             await JS.InvokeVoidAsync("initMap");
 
             // Load categories
-            Categories = await Http.GetFromJsonAsync<List<CategoryDto>>("http://10.0.2.2:5205/api/categories")
+            Categories = await Http.GetFromJsonAsync<List<CategoryDto>>(http://192.168.2.43:5205/api/categories")
                          ?? new List<CategoryDto>();
 
             Categories.Insert(0, new CategoryDto
@@ -94,7 +94,7 @@
     async Task LoadPOI(double lat, double lng)
     {
         var pois = await Http.GetFromJsonAsync<List<PoiDto>>(
-            $"http://10.0.2.2:5205/api/pois/nearby?lat={lat}&lng={lng}&radius=1000"); // tăng radius nếu cần
+            $"http://192.168.2.43:5205/api/pois/nearby?lat={lat}&lng={lng}&radius=1000"); // tăng radius nếu cần
 
         if (pois == null) return;
 
