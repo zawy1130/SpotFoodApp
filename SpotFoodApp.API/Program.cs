@@ -34,21 +34,21 @@ builder.Services.AddCors(options =>
 });
 
 // Kestrel - Nghe trên tất cả IP 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(5205);   // Port 5205
-});
+//builder.WebHost.ConfigureKestrel(options =>
+//{
+//    options.ListenAnyIP(5205);   // Port 5205
+//});
 
 var app = builder.Build();
 
 // ====================== MIDDLEWARE PIPELINE ======================
 
 // Swagger chỉ bật khi Development
-if (app.Environment.IsDevelopment())
-{
+//if (app.Environment.IsDevelopment())
+//{
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+//}
 
 // Quan trọng: UseCors phải đặt ở vị trí này
 app.UseCors("AllowAll");
