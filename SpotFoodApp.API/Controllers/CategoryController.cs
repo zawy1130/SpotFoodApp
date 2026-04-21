@@ -26,6 +26,15 @@ public class CategoriesController : ControllerBase
             })
             .ToListAsync();
 
+        await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
+        {
+            Endpoint = "/api/categories",
+            Method = "GET",
+            AccessedAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+
         return Ok(categories);
     }
 }
