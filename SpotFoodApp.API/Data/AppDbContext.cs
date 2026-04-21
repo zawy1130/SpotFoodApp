@@ -14,6 +14,7 @@ namespace SpotFoodApp.API.Data
         public DbSet<Category> Category{ get; set; }
 
         public DbSet<PoiTranslation> PoiTranslations { get; set; }
+        public DbSet<ApiAccessLog> ApiAccessLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

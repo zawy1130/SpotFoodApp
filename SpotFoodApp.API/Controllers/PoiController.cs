@@ -35,6 +35,15 @@ public class PoisController : ControllerBase
                 p.Address
             })
             .ToListAsync();
+        // Ghi log truy cập API.
+        await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
+        {
+            Endpoint = "/api/pois",
+            Method = "GET",
+            AccessedAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
 
         return Ok(pois);
     }
@@ -74,7 +83,15 @@ public class PoisController : ControllerBase
                        ? content.Audio.FilePath ?? ""
                        : ""
         };
+        // Ghi log truy cập API.
+        await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
+        {
+            Endpoint = "/api/pois/" + id,
+            Method = "GET",
+            AccessedAt = DateTime.UtcNow
+        });
 
+        await _context.SaveChangesAsync();
         return Ok(result);
     }
 
@@ -95,7 +112,15 @@ public class PoisController : ControllerBase
                 p.ImageUrl
             })
             .ToListAsync();
+        // Ghi log truy cập API.
+        await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
+        {
+            Endpoint = "/api/pois/category/" + categoryId,
+            Method = "GET",
+            AccessedAt = DateTime.UtcNow
+        });
 
+        await _context.SaveChangesAsync();
         return Ok(pois);
     }
 
