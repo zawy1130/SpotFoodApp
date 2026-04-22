@@ -10,9 +10,7 @@ namespace SpotFoodApp.API.Data
         public DbSet<Poi> Pois { get; set; }
         public DbSet<PoiContent> PoiContents { get; set; }
         public DbSet<AudioFile> AudioFiles { get; set; }
-
         public DbSet<Category> Category{ get; set; }
-
         public DbSet<PoiTranslation> PoiTranslations { get; set; }
         public DbSet<ApiAccessLog> ApiAccessLogs { get; set; }
 
@@ -45,6 +43,21 @@ namespace SpotFoodApp.API.Data
             modelBuilder.Entity<PoiTranslation>()
                 .HasIndex(t => new { t.PoiId, t.LanguageCode })
                 .IsUnique();
+
+            // Api Access Log
+            modelBuilder.Entity<ApiAccessLog>(entity =>
+            {
+                entity.ToTable("API_ACCESS_LOG");
+                entity.HasKey(x => x.LogId);
+
+                entity.Property(x => x.LogId).HasColumnName("log_id");
+                entity.Property(x => x.DeviceId).HasColumnName("device_id");
+                entity.Property(x => x.Endpoint).HasColumnName("endpoint");
+                entity.Property(x => x.HttpMethod).HasColumnName("http_method");
+                entity.Property(x => x.PoiId).HasColumnName("poi_id");
+                entity.Property(x => x.StatusCode).HasColumnName("status_code");
+                entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            });
         }
     }
 }
