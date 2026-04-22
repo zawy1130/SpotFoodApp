@@ -18,6 +18,8 @@ public class CategoriesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
+        var deviceId = Request.Headers["X-Device-Id"].FirstOrDefault() ?? "unknown";
+
         var categories = await _context.Category
             .Select(c => new
             {
@@ -28,7 +30,7 @@ public class CategoriesController : ControllerBase
 
         await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
         {
-            DeviceId = "unknown",
+            DeviceId = deviceId,
             Endpoint = "/api/categories",
             HttpMethod = "GET",
             PoiId = null,
