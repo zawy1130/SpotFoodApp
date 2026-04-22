@@ -38,9 +38,12 @@ public class PoisController : ControllerBase
         // Ghi log truy cập API.
         await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
         {
+            DeviceId = "unknown",
             Endpoint = "/api/pois",
-            Method = "GET",
-            AccessedAt = DateTime.UtcNow
+            HttpMethod = "GET",
+            PoiId = null,
+            StatusCode = 200,
+            CreatedAt = DateTime.UtcNow
         });
 
         await _context.SaveChangesAsync();
@@ -60,7 +63,21 @@ public class PoisController : ControllerBase
             .FirstOrDefaultAsync(p => p.PoiId == id);
 
         if (poi == null)
+        {
+            await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
+            {
+                DeviceId = "unknown",
+                Endpoint = "/api/pois/" + id,
+                HttpMethod = "GET",
+                PoiId = id,
+                StatusCode = 404,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+
             return NotFound();
+        }
 
         // Lấy bản dịch theo ngôn ngữ, fallback về tiếng Việt
         var translation = poi.Translations?
@@ -83,15 +100,19 @@ public class PoisController : ControllerBase
                        ? content.Audio.FilePath ?? ""
                        : ""
         };
-        // Ghi log truy cập API.
+
         await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
         {
+            DeviceId = "unknown",
             Endpoint = "/api/pois/" + id,
-            Method = "GET",
-            AccessedAt = DateTime.UtcNow
+            HttpMethod = "GET",
+            PoiId = id,
+            StatusCode = 200,
+            CreatedAt = DateTime.UtcNow
         });
 
         await _context.SaveChangesAsync();
+
         return Ok(result);
     }
 
@@ -115,9 +136,12 @@ public class PoisController : ControllerBase
         // Ghi log truy cập API.
         await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
         {
+            DeviceId = "unknown",
             Endpoint = "/api/pois/category/" + categoryId,
-            Method = "GET",
-            AccessedAt = DateTime.UtcNow
+            HttpMethod = "GET",
+            PoiId = null,
+            StatusCode = 200,
+            CreatedAt = DateTime.UtcNow
         });
 
         await _context.SaveChangesAsync();

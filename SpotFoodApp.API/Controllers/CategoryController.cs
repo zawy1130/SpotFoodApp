@@ -28,9 +28,12 @@ public class CategoriesController : ControllerBase
 
         await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
         {
+            DeviceId = "unknown",
             Endpoint = "/api/categories",
-            Method = "GET",
-            AccessedAt = DateTime.UtcNow
+            HttpMethod = "GET",
+            PoiId = null,
+            StatusCode = 200,
+            CreatedAt = DateTime.UtcNow
         });
 
         await _context.SaveChangesAsync();
