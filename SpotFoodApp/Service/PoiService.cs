@@ -1,5 +1,7 @@
 ﻿using SpotFoodApp.DTO;
 using System.Net.Http.Json;
+using Microsoft.Maui.Storage;
+using System.Net.Http.Headers;
 
 namespace SpotFoodApp.Service;
 
@@ -12,12 +14,21 @@ public class PoiService
         _httpClient = httpClient;
     }
 
-    // Lấy danh sách tất cả POI theo ngôn ngữ (dùng cho bản đồ)
+    // new with headers.
     public async Task<List<PoiDto>> GetAllPoisAsync(string language = "vi")
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<List<PoiDto>>($"api/pois?language={language}")
+            var deviceId = GetOrCreateDeviceId();
+            var request = new HttpRequestMessage(HttpMethod.Get, $"api/pois?language={language}");
+            request.Headers.Add("X-Device-Id", deviceId);
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+                return new List<PoiDto>();
+
+            return await response.Content.ReadFromJsonAsync<List<PoiDto>>()
                    ?? new List<PoiDto>();
         }
         catch (Exception ex)
@@ -32,12 +43,34 @@ public class PoiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<PoiDetailDto>($"api/pois/{id}?language={language}");
+            var deviceId = GetOrCreateDeviceId();
+            var request = new HttpRequestMessage(HttpMethod.Get, $"api/pois/{id}?language={language}");
+            request.Headers.Add("X-Device-Id", deviceId);
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            return await response.Content.ReadFromJsonAsync<PoiDetailDto>();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"GetPoiDetailAsync Error (ID={id}, Language={language}): {ex.Message}");
             return null;
         }
+    }
+
+    private string GetOrCreateDeviceId()
+    {
+        var savedDeviceId = Preferences.Get("device_id", string.Empty);
+
+        if (!string.IsNullOrEmpty(savedDeviceId))
+            return savedDeviceId;
+
+        var newDeviceId = Guid.NewGuid().ToString();
+        Preferences.Set("device_id", newDeviceId);
+
+        return newDeviceId;
     }
 }
