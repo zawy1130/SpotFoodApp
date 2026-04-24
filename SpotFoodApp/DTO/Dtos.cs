@@ -21,6 +21,8 @@ namespace SpotFoodApp.DTO
         public int CategoryId { get; set; }
         public string? ImageUrl { get; set; }
         public string? Address { get; set; }
+
+        public int Priority { get; set; } 
     }
 
     public class PoiDetailDto

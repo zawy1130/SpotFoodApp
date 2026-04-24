@@ -24,15 +24,21 @@ public class PoisController : ControllerBase
             .Select(p => new
             {
                 p.PoiId,
+
+                // 🔥 đa ngôn ngữ
                 Name = p.Translations!
                     .Where(t => t.LanguageCode == language)
                     .Select(t => t.Name)
                     .FirstOrDefault() ?? p.Name,
+
                 p.Latitude,
                 p.Longitude,
                 p.CategoryId,
                 p.ImageUrl,
-                p.Address
+                p.Address,
+
+                // 🔥 QUAN TRỌNG: thêm Priority
+                Priority = p.Priority
             })
             .ToListAsync();
 
@@ -55,7 +61,6 @@ public class PoisController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetDetail(int id, string language = "vi")
     {
-        // set deviceId thourgh hearder "X-Device-Id", default to "unknown" if not provided
         var deviceId = Request.Headers["X-Device-Id"].FirstOrDefault() ?? "unknown";
 
         var poi = await _context.Pois
@@ -78,11 +83,9 @@ public class PoisController : ControllerBase
             });
 
             await _context.SaveChangesAsync();
-
             return NotFound();
         }
 
-        // Lấy bản dịch theo ngôn ngữ, fallback về tiếng Việt
         var translation = poi.Translations?
             .FirstOrDefault(t => t.LanguageCode == language)
             ?? poi.Translations?.FirstOrDefault(t => t.LanguageCode == "vi");
@@ -98,7 +101,9 @@ public class PoisController : ControllerBase
             ImageUrl = poi.ImageUrl,
             MapLink = poi.MapLink,
 
-            // Chỉ trả Audio khi chọn tiếng Việt
+            // 🔥 thêm Priority
+            Priority = poi.Priority,
+
             AudioUrl = (language == "vi" && content?.Audio != null)
                        ? content.Audio.FilePath ?? ""
                        : ""
@@ -119,7 +124,6 @@ public class PoisController : ControllerBase
         return Ok(result);
     }
 
-
     // 📂 4. Lọc theo category
     [HttpGet("category/{categoryId}")]
     public async Task<IActionResult> GetByCategory(int categoryId)
@@ -135,10 +139,13 @@ public class PoisController : ControllerBase
                 p.Name,
                 p.Latitude,
                 p.Longitude,
-                p.ImageUrl
+                p.ImageUrl,
+
+                // 🔥 thêm Priority
+                Priority = p.Priority
             })
             .ToListAsync();
-        // Ghi log truy cập API.
+
         await _context.ApiAccessLogs.AddAsync(new ApiAccessLog
         {
             DeviceId = deviceId,

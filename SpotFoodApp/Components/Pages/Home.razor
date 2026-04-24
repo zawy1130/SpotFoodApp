@@ -1,3 +1,549 @@
 ﻿@page "/"
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject PoiService PoiService
+@inject TTSService TTS
 
-<h1>WELLCOM</h1>
+@using Microsoft.Maui.Devices.Sensors
+@using Microsoft.JSInterop
+@using SpotFoodApp.DTO
+@using SpotFoodApp.Service
+
+<div class="page">
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-title">
+            Phố ẩm thực Vĩnh Khánh
+        </div>
+
+        <div class="header-spacer"></div>
+
+        <div class="language-box">
+            <div class="lang-wrapper">
+                <!-- SELECT THẬT (ẩn) -->
+                <select @onchange="OnLanguageChanged" class="lang-native">
+                    @foreach (var lang in Languages)
+                    {
+                        <option value="@lang.Code" selected="@(lang.Code == SelectedLanguage)">
+                            @lang.Name
+                        </option>
+                    }
+                </select>
+
+                <!-- HIỂN THỊ GIẢ -->
+                <div class="lang-display">
+                    <div class="lang-flag">
+                        @(SelectedLanguage == "vi" ? "🇻🇳" :
+                          SelectedLanguage == "en" ? "🇺🇸" :
+                          SelectedLanguage == "ja" ? "🇯🇵" :
+                          SelectedLanguage == "zh" ? "🇨🇳" : "🌐")
+                    </div>
+                    <div class="lang-name">
+                        @SelectedLanguage.ToUpper()
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CATEGORY BAR -->
+    <div class="category-bar">
+        @foreach (var c in Categories)
+        {
+            <div class="category @(selectedCategoryId == c.CategoryId ? "active" : "")"
+                 @onclick="() => OnCategoryClick(c.CategoryId)">
+                @c.CategoryName
+            </div>
+        }
+    </div>
+
+    <!-- MAP -->
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+
+    <!-- POI DETAIL POPUP -->
+    <div id="poi-overlay" class="poi-overlay hidden">
+        <div class="poi-card">
+            <img id="poi-image" />
+
+            <div class="poi-content">
+                <h3 id="poi-name"></h3>
+                <p id="poi-desc"></p>
+                <p id="poi-address" class="poi-address"></p>
+
+                <div class="poi-actions">
+                    <a id="poi-map" target="_blank" rel="noopener">📍 Xem Google Maps</a>
+                    <button id="btn-audio">🔊 Nghe thuyết minh</button>
+                </div>
+
+                <button class="close-btn" onclick="mapHelper.closeOverlay()">✖</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="floating-buttons">
+        <!-- AUTO (trên) -->
+        <button class="floating-btn" style="background: @(IsAutoNarrationEnabled ? "#22c55e" : "#64748b");
+            color: white; border: none;"
+                @onclick="ToggleAutoNarration">
+            @(IsAutoNarrationEnabled ? "🔊" : "🔈")
+        </button>
+
+        <!-- LOCATION (dưới) -->
+        <button class="floating-btn"
+                @onclick="GoToCurrent">
+            📍
+        </button>
+    </div>
+
+    <!-- BOTTOM SHEET - Thông tin nhanh POI -->
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="drag-bar" id="dragBar"></div>
+        <div class="poi-list">
+            @foreach (var p in FilteredPois)
+            {
+                bool isHighlighting = CurrentlyHighlightingPoiId == p.PoiId;
+
+                <div class="poi-item @(isHighlighting ? "highlight" : "")"
+                     @onclick="() => FocusPoi(p)">
+                    
+                    <img src="@(p.ImageUrl ?? "/img/default.png")"
+                         class="poi-quick-image"
+                         alt="@p.Name" />
+
+                    <div class="poi-info">
+                        <div class="poi-title">@p.Name</div>
+                        <div class="poi-address-quick">@p.Address</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+</div>
+
+@code {
+    // ================= STATE =================
+    double lat = 10.762622;
+    double lng = 106.660172;
+    bool isTracking = true;
+    int selectedCategoryId = 0;
+
+    List<CategoryDto> Categories = new();
+    List<PoiDto> AllPois = new();
+    List<PoiDto> FilteredPois = new();
+
+    // ================= NGÔN NGỮ =================
+    List<LanguageOption> Languages = new()
+    {
+        new LanguageOption { Code = "vi", Name = "🇻🇳 Tiếng Việt" },
+        new LanguageOption { Code = "en", Name = "🇺🇸 English" },
+        new LanguageOption { Code = "ja", Name = "🇯🇵 日本語" },
+        new LanguageOption { Code = "zh", Name = "🇨🇳 中文" }
+    };
+
+    string SelectedLanguage = "vi";
+
+    // ================= AUTO NARRATION =================
+    bool IsAutoNarrationEnabled = false;
+
+    // Các POI đã được thuyết minh (không lặp lại)
+    HashSet<int> NarratedPois = new();
+
+    // POI đang được thuyết minh
+    int? CurrentlyNarratingPoiId = null;
+
+    // ================= CHỐNG SPAM =================
+
+    // Thời điểm phát thuyết minh gần nhất
+    DateTime lastNarrationTime = DateTime.MinValue;
+
+    // Lưu vị trí trước đó để check user có di chuyển không
+    double prevLat = 0;
+    double prevLng = 0;
+
+    // Ngưỡng cấu hình
+    const double TRIGGER_DISTANCE = 30;   // trong 30m mới xét phát
+    const double STOP_DISTANCE = 35;      // >35m thì dừng
+    const double MOVE_THRESHOLD = 5;      // phải di chuyển >5m mới trigger
+    const int COOLDOWN_SECONDS = 10;      // nghỉ 10s giữa các lần phát
+
+    // ================= HIGHLIGHT =================
+    int? CurrentlyHighlightingPoiId { get; set; }
+
+    DotNetObjectReference<Home>? objRef;
+
+    // ================= INITIALIZATION =================
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategoryFromApi();
+        await LoadPoiFromApi();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+
+            var location = await GetLocation();
+            if (location != null)
+            {
+                lat = location.Latitude;
+                lng = location.Longitude;
+            }
+
+            var mapData = ConvertToPlaces(FilteredPois);
+            await JS.InvokeVoidAsync("mapHelper.initMap", lat, lng, mapData, objRef);
+
+            _ = StartTracking();
+        }
+    }
+
+    // ================= LANGUAGE & DATA =================
+    void OnLanguageChanged(ChangeEventArgs e)
+    {
+        SelectedLanguage = e.Value?.ToString() ?? "vi";
+        _ = LoadPoiFromApi();
+    }
+
+    async Task LoadCategoryFromApi()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<CategoryDto>>("api/categories");
+            if (result != null)
+            {
+                result.Insert(0, new CategoryDto { CategoryId = 0, CategoryName = "Tất cả" });
+                Categories = result;
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"Category Error: {ex.Message}"); }
+    }
+
+    async Task LoadPoiFromApi()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<PoiDto>>($"api/pois?language={SelectedLanguage}");
+            if (result != null)
+            {
+                AllPois = result;
+                FilteredPois = result.ToList();
+            }
+        }
+        catch (Exception ex) { Console.WriteLine($"POI Error: {ex.Message}"); }
+    }
+
+    async Task OnCategoryClick(int categoryId)
+    {
+        selectedCategoryId = categoryId;
+        FilteredPois = categoryId == 0
+            ? AllPois.ToList()
+            : AllPois.Where(p => p.CategoryId == categoryId).ToList();
+
+        var mapData = ConvertToPlaces(FilteredPois);
+        await JS.InvokeVoidAsync("mapHelper.updatePlaces", mapData);
+        StateHasChanged();
+    }
+
+    List<Place> ConvertToPlaces(List<PoiDto> list)
+    {
+        return list.Select(p => new Place
+        {
+            poiId = p.PoiId,
+            name = p.Name ?? "",
+            lat = p.Latitude,
+            lng = p.Longitude,
+            categoryId = p.CategoryId
+        }).ToList();
+    }
+
+    // ================= LOCATION =================
+
+    async Task<Location?> GetLocation()
+    {
+        try
+        {
+            return await Geolocation.Default.GetLocationAsync(
+                new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(5)));
+        }
+        catch { return null; }
+    }
+
+    async Task StartTracking()
+    {
+        while (isTracking)
+        {
+            var location = await GetLocation();
+            if (location != null)
+            {
+                // lưu vị trí cũ để check di chuyển
+                prevLat = lat;
+                prevLng = lng;
+
+                lat = location.Latitude;
+                lng = location.Longitude;
+
+                await JS.InvokeVoidAsync("mapHelper.updateUserLocation", lat, lng);
+
+                // gọi xử lý auto narration
+                await CheckNearbyPois();
+            }
+
+            await Task.Delay(3000);
+        }
+    }
+
+    async Task GoToCurrent()
+    {
+        await JS.InvokeVoidAsync("mapHelper.goToCurrentLocation");
+    }
+
+    // ================= AUTO NARRATION & DISTANCE CHECK =================
+
+    /// <summary>
+    /// Kiểm tra POI gần và quản lý narration. Dừng nếu di chuyển ra xa.
+    /// </summary>
+    async Task CheckNearbyPois()
+    {
+        if (!IsAutoNarrationEnabled) return;
+
+        // ================= 1. NẾU ĐANG PHÁT =================
+        if (CurrentlyNarratingPoiId.HasValue)
+        {
+            var currentPoi = AllPois.FirstOrDefault(p => p.PoiId == CurrentlyNarratingPoiId.Value);
+
+            if (currentPoi != null)
+            {
+                double distance = CalculateDistance(lat, lng, currentPoi.Latitude, currentPoi.Longitude);
+
+                // ❗ Nếu rời xa >35m → dừng ngay
+                if (distance > STOP_DISTANCE)
+                {
+                    await StopCurrentNarration();
+
+                    // đánh dấu đã đọc để không phát lại
+                    NarratedPois.Add(currentPoi.PoiId);
+                }
+            }
+
+            return; // đang phát thì không xét POI khác
+        }
+
+        // ================= 2. CHỐNG SPAM - COOLDOWN =================
+        if ((DateTime.Now - lastNarrationTime).TotalSeconds < COOLDOWN_SECONDS)
+            return;
+
+        // ================= 3. CHỐNG SPAM - USER PHẢI DI CHUYỂN =================
+        double movedDistance = CalculateDistance(prevLat, prevLng, lat, lng);
+
+        if (movedDistance < MOVE_THRESHOLD)
+            return; // đứng yên → không phát
+
+        // ================= 4. LỌC POI TRONG 30m =================
+        var candidates = AllPois
+            .Where(p => !NarratedPois.Contains(p.PoiId)) // chưa đọc
+            .Select(p => new
+            {
+                Poi = p,
+                Distance = CalculateDistance(lat, lng, p.Latitude, p.Longitude)
+            })
+            .Where(x => x.Distance <= TRIGGER_DISTANCE)
+            .ToList();
+
+        if (!candidates.Any()) return;
+
+        // ================= 5. CHỌN POI THEO ƯU TIÊN =================
+        var best = candidates
+            .OrderBy(x => x.Poi.Priority)   // 🔥 priority nhỏ hơn → ưu tiên cao hơn
+            .ThenBy(x => x.Distance)        // 🔥 nếu bằng nhau → gần hơn
+            .First();
+
+        int selectedPoiId = best.Poi.PoiId;
+
+        // ================= 6. BẮT ĐẦU THUYẾT MINH =================
+        CurrentlyNarratingPoiId = selectedPoiId;
+        lastNarrationTime = DateTime.Now; // lưu lại để chống spam
+
+        await HighlightPoi(selectedPoiId);
+        await HandleAutoNarration(selectedPoiId);
+    }
+
+    /// <summary>
+    /// Dừng narration hiện tại (TTS + Audio) và xóa highlight
+    /// </summary>
+    async Task StopCurrentNarration()
+    {
+        // dừng TTS
+        TTS.CancelCurrent();
+
+        // dừng audio JS
+        await JS.InvokeVoidAsync("mapHelper.stopCurrentAudio");
+
+        // bỏ highlight
+        await ClearHighlight();
+
+        CurrentlyNarratingPoiId = null;
+    }
+
+    async Task HandleAutoNarration(int poiId)
+    {
+        var detail = await PoiService.GetPoiDetailAsync(poiId, SelectedLanguage);
+
+        if (detail == null)
+        {
+            CurrentlyNarratingPoiId = null;
+            return;
+        }
+
+        var text = detail.Description ?? "";
+
+        try
+        {
+            // ================= PHÁT AUDIO =================
+
+            // Nếu tiếng Việt và có file audio → dùng audio thật
+            if (SelectedLanguage == "vi" && !string.IsNullOrEmpty(detail.AudioUrl))
+            {
+                await JS.InvokeVoidAsync("mapHelper.playAudio", detail.AudioUrl);
+            }
+            else
+            {
+                // Ngôn ngữ khác → dùng TTS
+                await TTS.Speak(text, SelectedLanguage);
+            }
+
+            // ================= ĐÁNH DẤU ĐÃ ĐỌC =================
+            NarratedPois.Add(poiId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Auto Narration Error: {ex.Message}");
+        }
+        finally
+        {
+            // reset trạng thái
+            CurrentlyNarratingPoiId = null;
+        }
+    }
+
+    private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 6371000;
+        double dLat = (lat2 - lat1) * Math.PI / 180;
+        double dLon = (lon2 - lon1) * Math.PI / 180;
+
+        double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                   Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
+                   Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+        double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return R * c;
+    }
+
+    void ToggleAutoNarration()
+    {
+        IsAutoNarrationEnabled = !IsAutoNarrationEnabled;
+        StateHasChanged();
+
+        if (!IsAutoNarrationEnabled)
+        {
+            CurrentlyNarratingPoiId = null;
+            TTS.CancelCurrent();
+            _ = ClearHighlight();
+        }
+    }
+
+    // ================= HIGHLIGHT =================
+
+    async Task HighlightPoi(int poiId)
+    {
+        CurrentlyHighlightingPoiId = poiId;
+        await JS.InvokeVoidAsync("mapHelper.highlightPoi", poiId);
+        StateHasChanged();
+    }
+
+    async Task ClearHighlight()
+    {
+        CurrentlyHighlightingPoiId = null;
+        await JS.InvokeVoidAsync("mapHelper.clearHighlight");
+        StateHasChanged();
+    }
+
+    // ================= USER INTERACTION =================
+
+    async Task FocusPoi(PoiDto poi)
+    {
+        await JS.InvokeVoidAsync("mapHelper.focusToLocation", poi.Latitude, poi.Longitude);
+        await OpenPoiDetail(poi.PoiId);
+    }
+
+    [JSInvokable("OpenPoiDetail")]
+    public async Task OpenPoiDetail(int poiId)
+    {
+        try
+        {
+            var detail = await PoiService.GetPoiDetailAsync(poiId, SelectedLanguage);
+            if (detail == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Không tìm thấy địa điểm");
+                return;
+            }
+
+            await HighlightPoi(poiId);
+            await JS.InvokeVoidAsync("mapHelper.showPoiDetail", detail);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Detail Error: {ex.Message}");
+        }
+    }
+
+    [JSInvokable("HandleAudioLogic")]
+    public async Task HandleAudioLogic(PoiDetailDto data)
+    {
+        if (data == null) return;
+
+        var text = data.Description ?? "";
+
+        if (SelectedLanguage == "vi" && !string.IsNullOrEmpty(data.AudioUrl))
+        {
+            await JS.InvokeVoidAsync("mapHelper.playAudio", data.AudioUrl);
+            return;
+        }
+
+        await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "speaking-tts");
+
+        try
+        {
+            await TTS.Speak(text, SelectedLanguage);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"TTS Error: {ex.Message}");
+        }
+        finally
+        {
+            await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "idle");
+        }
+    }
+
+    [JSInvokable("StopTTS")]
+    public async Task StopTTS()
+    {
+        TTS.CancelCurrent();
+        await JS.InvokeVoidAsync("mapHelper.setAudioButtonState", "idle");
+    }
+
+    // ================= CLEANUP =================
+    public void Dispose()
+    {
+        isTracking = false;
+        objRef?.Dispose();
+        TTS.CancelCurrent();
+        _ = ClearHighlight();
+    }
+}

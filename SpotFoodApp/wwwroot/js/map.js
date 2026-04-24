@@ -33,6 +33,7 @@ window.mapHelper = {
         iconAnchor: [22, 45]
     }),
 
+
     // ================= HIGHLIGHT =================
     currentlyHighlightedMarker: null,
     originalIcon: null,
@@ -79,26 +80,48 @@ window.mapHelper = {
         let startY = 0;
         let isDragging = false;
 
-        const start = (y) => { startY = y; isDragging = true; };
+        let currentTranslate = 65; // trạng thái ban đầu
+        const MAX = 65;  // đóng
+        const MIN = 0;   // mở tối đa (70% màn hình)
+
+        const setTranslate = (value) => {
+            currentTranslate = Math.min(Math.max(value, MIN), MAX);
+            sheet.style.transform = `translateY(${currentTranslate}%)`;
+        };
+
+        const start = (y) => {
+            startY = y;
+            isDragging = true;
+        };
+
         const move = (y) => {
             if (!isDragging) return;
+
             const delta = y - startY;
-            sheet.style.transform = `translateY(${Math.max(0, 68 + delta / 5)}%)`;
+            const percentMove = (delta / window.innerHeight) * 100;
+
+            setTranslate(currentTranslate + percentMove);
         };
+
         const end = () => {
             isDragging = false;
-            sheet.style.transform = "";
-            if (sheet.style.transform.includes("0%")) {
+
+            // SNAP (chỉ 2 mức)
+            if (currentTranslate < 35) {
+                setTranslate(0); // mở tối đa (70%)
                 sheet.classList.add("expanded");
             } else {
+                setTranslate(65); // đóng
                 sheet.classList.remove("expanded");
             }
         };
 
+        // TOUCH
         dragBar.addEventListener("touchstart", e => start(e.touches[0].clientY));
         dragBar.addEventListener("touchmove", e => move(e.touches[0].clientY));
         dragBar.addEventListener("touchend", end);
 
+        // MOUSE
         dragBar.addEventListener("mousedown", e => start(e.clientY));
         window.addEventListener("mousemove", e => move(e.clientY));
         window.addEventListener("mouseup", end);
@@ -259,3 +282,16 @@ window.mapHelper = {
         this.setAudioButtonState("idle");
     }
 };
+
+function toggleLangDropdown() {
+    const dropdown = document.getElementById("langDropdown");
+    dropdown.classList.toggle("show");
+}
+
+// click ngoài để đóng
+window.addEventListener("click", function (e) {
+    const box = document.querySelector(".language-box");
+    if (!box.contains(e.target)) {
+        document.getElementById("langDropdown").classList.remove("show");
+    }
+});

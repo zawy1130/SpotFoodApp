@@ -31,6 +31,9 @@ namespace SpotFoodApp.API.Model
         [Column("category_id")]
         public int? CategoryId { get; set; }
 
+        [Column("priority")]
+        public int Priority { get; set; }
+
         [Column("created_at")]
         public DateTime? CreatedAt { get; set; }
 
