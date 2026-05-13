@@ -32,7 +32,7 @@ The application provides location-based food discovery with multilingual content
 Scan the QR code below to download and install the Android APK:
 
 <p align="center">
-  <img src="./screenshots/QR-mobileApp.png" width="220"/>
+  <img src="./screenshots/QR-mobileApp.jpg" width="220"/>
 </p>
 
 ---
